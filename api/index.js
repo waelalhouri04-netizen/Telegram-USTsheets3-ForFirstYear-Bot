@@ -32,9 +32,12 @@ function getSubjects() {
   const filesDir = path.join(process.cwd(), "files");
   if (!fs.existsSync(filesDir)) return subjects;
 
+  const ALLOWED_EXT = [".pdf", ".pptx", ".docx", ".xlsx", ".png", ".jpg"];
+
   fs.readdirSync(filesDir).forEach(filename => {
-    if (!filename.toLowerCase().endsWith(".pdf")) return;
-    const name = filename.slice(0, -4);
+    const ext = filename.slice(filename.lastIndexOf(".")).toLowerCase();
+    if (!ALLOWED_EXT.includes(ext)) return;
+    const name = filename.slice(0, filename.lastIndexOf("."));
     const dash = name.indexOf("-");
     if (dash === -1) return;
     const rawSubject = name.slice(0, dash);
@@ -92,18 +95,18 @@ function subjectsKeyboard() {
 function lecturesKeyboard(subject, lectures) {
   const sorted  = Object.keys(lectures).sort(naturalSort);
   const buttons = sorted.map(lec => [{ text: `📄 ${lec}`, callback_data: `lec|${subject}|||${lec}` }]);
-  buttons.push([{ text: "🔙 ورا", callback_data: "back" }]);
+  buttons.push([{ text: "🔙 رجوع", callback_data: "back" }]);
   return { inline_keyboard: buttons };
 }
 
 function backKeyboard() {
-  return { inline_keyboard: [[{ text: "🔙 ورا", callback_data: "back" }]] };
+  return { inline_keyboard: [[{ text: "🔙 رجوع", callback_data: "back" }]] };
 }
 
 async function handleStart(chatId) {
   await telegramRequest("sendMessage", {
     chat_id:      chatId,
-    text:         "👋 أختار المادة وشوف الشيتات المتوفرة",
+    text:         "👋 أهلاً! اختر المادة لتصفح الشيتات:",
     reply_markup: subjectsKeyboard()
   });
 }
@@ -129,7 +132,7 @@ async function handleCallback(callback) {
     } else {
       await telegramRequest("editMessageText", {
         chat_id:      chatId, message_id: msgId,
-        text:         `📖 ${subject} — اختار الشيت:`,
+        text:         `📖 ${subject} — اختر الشيت:`,
         reply_markup: lecturesKeyboard(subject, lectures)
       });
     }
