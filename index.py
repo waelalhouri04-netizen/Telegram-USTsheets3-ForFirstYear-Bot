@@ -42,15 +42,19 @@ def get_subjects() -> dict:
     subjects = {}
     if not os.path.exists(FILES_DIR):
         return subjects
+    # بناء خريطة من الاسم بالحروف الصغيرة إلى الاسم الرسمي
+    subject_map = {s.lower(): s for s in ALL_SUBJECTS}
     for filename in os.listdir(FILES_DIR):
         if not filename.lower().endswith(".pdf"):
             continue
-        name  = filename[:-4]
-        dash  = name.find("-")
+        name = filename[:-4]
+        dash = name.find("-")
         if dash == -1:
             continue
-        subject = name[:dash]
-        lecture = name[dash + 1:]
+        raw_subject = name[:dash]
+        lecture     = name[dash + 1:]
+        # تطابق غير حساس للحروف
+        subject = subject_map.get(raw_subject.lower(), raw_subject)
         subjects.setdefault(subject, {})[lecture] = os.path.join(FILES_DIR, filename)
     return subjects
 
