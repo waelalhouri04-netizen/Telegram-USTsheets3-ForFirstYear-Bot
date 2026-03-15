@@ -78,7 +78,15 @@ function telegramRequest(method, body) {
 }
 
 function subjectsKeyboard() {
-  return { inline_keyboard: ALL_SUBJECTS.map(s => [{ text: `📘 ${s}`, callback_data: `sub|${s}` }]) };
+  const rows = [];
+  for (let i = 0; i < ALL_SUBJECTS.length; i += 2) {
+    const row = [{ text: `📘 ${ALL_SUBJECTS[i]}`, callback_data: `sub|${ALL_SUBJECTS[i]}` }];
+    if (ALL_SUBJECTS[i + 1]) {
+      row.push({ text: `📘 ${ALL_SUBJECTS[i + 1]}`, callback_data: `sub|${ALL_SUBJECTS[i + 1]}` });
+    }
+    rows.push(row);
+  }
+  return { inline_keyboard: rows };
 }
 
 function lecturesKeyboard(subject, lectures) {
