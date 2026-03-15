@@ -14,18 +14,18 @@ const REDIS_TOKEN = process.env.KV_REST_API_TOKEN;
 
 // ── جدول المحاضرات ──
 const SCHEDULE = {
-  "السبت":    [{ time: "20:00 – 22:00", subject: "Physics - 1" }],
+  "السبت":    [{ time: "8:00 – 10:00 PM", subject: "Physics - 1" }],
   "الأحد":    [],
-  "الاثنين":  [{ time: "10:00 – 12:00", subject: "General Chemistry" }],
+  "الاثنين":  [{ time: "10:00 AM – 12:00 PM", subject: "General Chemistry" }],
   "الثلاثاء": [],
   "الأربعاء": [
-    { time: "08:00 – 10:00", subject: "Introduction to Computer" },
-    { time: "10:00 – 12:00", subject: "Calculus and its Application - 1" },
-    { time: "13:00 – 15:00", subject: "Linear Algebra and Matrices" }
+    { time: "8:00 – 10:00 AM", subject: "Introduction to Computer" },
+    { time: "10:00 AM – 12:00 PM", subject: "Calculus and its Application - 1" },
+    { time: "1:00 – 3:00 PM", subject: "Linear Algebra and Matrices" }
   ],
   "الخميس":   [
-    { time: "11:00 – 13:00", subject: "General English Language" },
-    { time: "13:00 – 15:00", subject: "Introduction to Materials Science" }
+    { time: "11:00 AM – 1:00 PM", subject: "General English Language" },
+    { time: "1:00 – 3:00 PM", subject: "Introduction to Materials Science" }
   ]
 };
 
@@ -193,29 +193,33 @@ function buildScheduleText() {
   const dayName   = DAY_NAMES[today.getDay()];
   const todayLecs = SCHEDULE[dayName] || [];
 
-  let text = "";
+  // أيقونة حسب الوقت
+  function icon(time) {
+    if (time.includes("PM") && !time.startsWith("12")) return "🌙";
+    if (time.startsWith("1") && time.includes("PM"))   return "🌤";
+    return "☀️";
+  }
+
+  let text = "📅 جدول المحاضرات\n\n";
 
   // محاضرات اليوم
   if (todayLecs.length > 0) {
-    text += `⚡️ محاضرات اليوم (${dayName}):\n`;
+    text += `⚡️ اليوم (${dayName}):\n`;
     for (const lec of todayLecs) {
-      text += `🕐 ${lec.time} — ${lec.subject}\n`;
+      text += `${icon(lec.time)} ${lec.subject.padEnd(14)} ${lec.time}\n`;
     }
+    text += "\n";
   } else {
-    text += `✅ لا توجد محاضرات اليوم (${dayName})\n`;
+    text += `✅ لا توجد محاضرات اليوم (${dayName})\n\n`;
   }
 
-  text += "\n📅 الجدول الكامل:\n━━━━━━━━━━━━━━━\n\n";
-
+  // الجدول الكامل
   for (const [day, lectures] of Object.entries(SCHEDULE)) {
+    if (lectures.length === 0) continue;
     const isToday = day === dayName;
-    text += isToday ? `📍 ${day} (اليوم)\n` : `📆 ${day}\n`;
-    if (lectures.length === 0) {
-      text += "  لا توجد محاضرات\n";
-    } else {
-      for (const lec of lectures) {
-        text += `  🕐 ${lec.time} — ${lec.subject}\n`;
-      }
+    text += `━━━ ${day}${isToday ? " (اليوم)" : ""} ━━━\n`;
+    for (const lec of lectures) {
+      text += `${icon(lec.time)} ${lec.subject.padEnd(14)} ${lec.time}\n`;
     }
     text += "\n";
   }
