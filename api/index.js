@@ -8,10 +8,10 @@ const GITHUB_REPO   = "Telegram-USTsheets3-ForFirstYear-Bot";
 const GITHUB_BRANCH = "main";
 const RAW_BASE      = `https://github.com/${GITHUB_USER}/${GITHUB_REPO}/raw/${GITHUB_BRANCH}/files`;
 
-// ── ملفات كبيرة على Google Drive ──
-// الصيغة: "SubjectName-lectureName": "DRIVE_FILE_ID"
-const DRIVE_FILES = {
-  "English-lec-1": "1wHn3MTvF-fLx9LuYgyRpMfCBARDfFWl6"
+// ── ملفات كبيرة: استخدم file_id من تيليجرام ──
+// الصيغة: "SubjectName-lectureName": "FILE_ID"
+const LARGE_FILES = {
+  "English-lec-1": "BQACAgQAAxkBAAMzabZGREobdOVkk3SIOcldjtYknJoAAjQcAAJsUrFRlVNb_Irr6Og6BA"
 };
 
 const ALL_SUBJECTS = [
@@ -44,16 +44,14 @@ function getSubjects() {
     subjects[subject][lecture] = filename;
   });
 
-  // أضف ملفات Drive لو ما هي موجودة في GitHub
-  Object.keys(DRIVE_FILES).forEach(key => {
+  // أضف الملفات الكبيرة
+  Object.keys(LARGE_FILES).forEach(key => {
     const dash    = key.indexOf("-");
     const rawSub  = key.slice(0, dash);
     const lecture = key.slice(dash + 1);
     const subject = subjectMap[rawSub.toLowerCase()] || rawSub;
     if (!subjects[subject]) subjects[subject] = {};
-    if (!subjects[subject][lecture]) {
-      subjects[subject][lecture] = `drive:${key}`;
-    }
+    subjects[subject][lecture] = `fileid:${key}`;
   });
 
   return subjects;
@@ -134,23 +132,24 @@ async function handleCallback(callback) {
     const fileVal            = subjects[subject]?.[lecture];
 
     if (fileVal) {
-      let fileUrl;
-
-      if (fileVal.startsWith("drive:")) {
-        // ملف على Google Drive
-        const driveKey = fileVal.slice(6);
-        const driveId  = DRIVE_FILES[driveKey];
-        fileUrl = `https://drive.google.com/uc?export=download&id=${driveId}`;
+      if (fileVal.startsWith("fileid:")) {
+        // ملف كبير — استخدم file_id مباشرة
+        const key    = fileVal.slice(7);
+        const fileId = LARGE_FILES[key];
+        await telegramRequest("sendDocument", {
+          chat_id:  chatId,
+          document: fileId,
+          caption:  `📚 ${subject}\n📄 ${lecture}`
+        });
       } else {
-        // ملف على GitHub
-        fileUrl = `${RAW_BASE}/${encodeURIComponent(fileVal)}`;
+        // ملف صغير — من GitHub
+        const fileUrl = `${RAW_BASE}/${encodeURIComponent(fileVal)}`;
+        await telegramRequest("sendDocument", {
+          chat_id:  chatId,
+          document: fileUrl,
+          caption:  `📚 ${subject}\n📄 ${lecture}`
+        });
       }
-
-      await telegramRequest("sendDocument", {
-        chat_id:  chatId,
-        document: fileUrl,
-        caption:  `📚 ${subject}\n📄 ${lecture}`
-      });
     } else {
       await telegramRequest("sendMessage", { chat_id: chatId, text: "❌ الملف غير موجود." });
     }
