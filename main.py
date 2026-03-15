@@ -7,15 +7,20 @@ TOKEN = os.environ.get("TOKEN")
 if not TOKEN:
     raise ValueError("❌ لم يتم ضبط متغير البيئة TOKEN")
 
+# رابط البوت الخارجي من Render
+RENDER_URL = os.environ.get("RENDER_EXTERNAL_URL")
+if not RENDER_URL:
+    raise ValueError("❌ لم يتم ضبط متغير البيئة RENDER_EXTERNAL_URL")
+
+PORT = int(os.environ.get("PORT", 5000))
+
 FILES_DIR = "files"
 if not os.path.exists(FILES_DIR):
     os.makedirs(FILES_DIR)
 
-# جميع المواد تظهر دائمًا
 ALL_SUBJECTS = ["Physics", "Chemistry", "Computer", "Calculus", "Linear", "English", "Materials", "History"]
 
 def get_subjects():
-    """إرجاع قاعدة بيانات المواد والمحاضرات الموجودة"""
     subjects = {}
     for filename in os.listdir(FILES_DIR):
         if filename.endswith(".pdf"):
@@ -41,7 +46,6 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     subjects = get_subjects()
 
-    # اختيار مادة
     if data.startswith("sub|"):
         subject = data.split("|")[1]
         lectures = subjects.get(subject, {})
@@ -58,7 +62,6 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         buttons.append([InlineKeyboardButton("🔙 رجوع", callback_data="back")])
         await query.edit_message_text(f"📖 {subject}", reply_markup=InlineKeyboardMarkup(buttons))
 
-    # اختيار محاضرة
     elif data.startswith("lec|"):
         _, subject, lecture = data.split("|")
         file = subjects.get(subject, {}).get(lecture)
@@ -69,18 +72,16 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await query.message.reply_text("❌ الملف غير موجود")
 
-    # زر رجوع
     elif data == "back":
         buttons = [[InlineKeyboardButton(sub, callback_data=f"sub|{sub}")] for sub in ALL_SUBJECTS]
         await query.edit_message_text("📚 اختر المادة", reply_markup=InlineKeyboardMarkup(buttons))
 
-# ضع Telegram ID الخاص بك هنا
 ALLOWED_USERS = [1277382550]
 
 async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     if user_id not in ALLOWED_USERS:
-        await update.message.reply_text("❌ هذا البوت خاص ـ الجنخر وائل فقط")
+        await update.message.reply_text("❌ هذا البوت خاص بـ الجنخر وائل فقط")
         return
 
     file = await update.message.document.get_file()
@@ -89,14 +90,15 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await file.download_to_drive(path)
     await update.message.reply_text(f"✅ تم حفظ الملف:\n{file_name}")
 
-# تشغيل البوت
+# إعداد البوت
 app = ApplicationBuilder().token(TOKEN).build()
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CallbackQueryHandler(button))
 app.add_handler(MessageHandler(filters.Document.ALL, handle_file))
 
-# لأمان Render Web Service
-PORT = int(os.environ.get("PORT", 5000))
-print(f"🤖 البوت جاهز ويعمل على المنفذ {PORT}")
-
-app.run_polling()
+# تشغيل Webhook على Render
+app.run_webhook(
+    listen="0.0.0.0",
+    port=PORT,
+    webhook_url=f"{RENDER_URL}/bot{TOKEN}"
+)
