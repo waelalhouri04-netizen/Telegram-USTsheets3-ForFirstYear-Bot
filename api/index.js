@@ -3,13 +3,48 @@ import path from "path";
 import https from "https";
 
 const TOKEN         = process.env.TOKEN;
+const ADMIN_ID      = 1277382550; // رقمك — يستلم الإشعارات
 const GITHUB_USER   = "waelalhouri04-netizen";
 const GITHUB_REPO   = "Telegram-USTsheets3-ForFirstYear-Bot";
 const GITHUB_BRANCH = "main";
 const RAW_BASE      = `https://github.com/${GITHUB_USER}/${GITHUB_REPO}/raw/${GITHUB_BRANCH}/files`;
 
-// ── ملفات كبيرة: استخدم file_id من تيليجرام ──
-// الصيغة: "SubjectName-lectureName": "FILE_ID"
+// ── Upstash Redis ──
+const REDIS_URL   = process.env.KV_REST_API_URL;
+const REDIS_TOKEN = process.env.KV_REST_API_TOKEN;
+
+async function redisRequest(method, ...args) {
+  if (!REDIS_URL || !REDIS_TOKEN) return null;
+  try {
+    const res = await fetch(`${REDIS_URL}/${method}/${args.join("/")}`, {
+      headers: { Authorization: `Bearer ${REDIS_TOKEN}` }
+    });
+    const data = await res.json();
+    return data.result;
+  } catch {
+    return null;
+  }
+}
+
+// زيادة عداد الإحصائيات
+async function trackDownload(subject, lecture) {
+  await redisRequest("incr", `downloads:${subject}:${lecture}`);
+  await redisRequest("incr", "downloads:total");
+}
+
+// حفظ معرف المستخدم
+async function trackUser(userId) {
+  await redisRequest("sadd", "users", userId);
+}
+
+// جلب الإحصائيات
+async function getStats() {
+  const total   = await redisRequest("get", "downloads:total") || 0;
+  const users   = await redisRequest("scard", "users") || 0;
+  return { total, users };
+}
+
+// ── ملفات كبيرة ──
 const LARGE_FILES = {
   "English-lec-1": "BQACAgQAAxkBAAMzabZGREobdOVkk3SIOcldjtYknJoAAjQcAAJsUrFRlVNb_Irr6Og6BA"
 };
@@ -19,6 +54,8 @@ const ALL_SUBJECTS = [
   "Calculus", "Linear", "English",
   "Materials", "History"
 ];
+
+const ALLOWED_EXT = [".pdf", ".pptx", ".docx", ".xlsx", ".png", ".jpg"];
 
 function naturalSort(a, b) {
   return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
@@ -31,8 +68,6 @@ function getSubjects() {
 
   const filesDir = path.join(process.cwd(), "files");
   if (!fs.existsSync(filesDir)) return subjects;
-
-  const ALLOWED_EXT = [".pdf", ".pptx", ".docx", ".xlsx", ".png", ".jpg"];
 
   fs.readdirSync(filesDir).forEach(filename => {
     const ext = filename.slice(filename.lastIndexOf(".")).toLowerCase();
@@ -47,7 +82,6 @@ function getSubjects() {
     subjects[subject][lecture] = filename;
   });
 
-  // أضف الملفات الكبيرة
   Object.keys(LARGE_FILES).forEach(key => {
     const dash    = key.indexOf("-");
     const rawSub  = key.slice(0, dash);
@@ -103,11 +137,24 @@ function backKeyboard() {
   return { inline_keyboard: [[{ text: "🔙 رجوع", callback_data: "back" }]] };
 }
 
-async function handleStart(chatId) {
+async function handleStart(chatId, firstName) {
+  await trackUser(chatId);
   await telegramRequest("sendMessage", {
     chat_id:      chatId,
-    text:         "👋 أهلاً! اختر المادة لتصفح الشيتات:",
+    text:         `👋 أهلاً ${firstName || ""}! اختر المادة لتصفح الشيتات:`,
     reply_markup: subjectsKeyboard()
+  });
+}
+
+async function handleStats(chatId) {
+  if (chatId !== ADMIN_ID) {
+    await telegramRequest("sendMessage", { chat_id: chatId, text: "❌ هذا الأمر للمشرف فقط." });
+    return;
+  }
+  const { total, users } = await getStats();
+  await telegramRequest("sendMessage", {
+    chat_id: chatId,
+    text:    `📊 الإحصائيات:\n\n👥 المستخدمون: ${users}\n📥 إجمالي التحميلات: ${total}`
   });
 }
 
@@ -143,8 +190,10 @@ async function handleCallback(callback) {
     const fileVal            = subjects[subject]?.[lecture];
 
     if (fileVal) {
+      // تسجيل الإحصائيات
+      await trackDownload(subject, lecture);
+
       if (fileVal.startsWith("fileid:")) {
-        // ملف كبير — استخدم file_id مباشرة
         const key    = fileVal.slice(7);
         const fileId = LARGE_FILES[key];
         await telegramRequest("sendDocument", {
@@ -153,7 +202,6 @@ async function handleCallback(callback) {
           caption:  `📚 ${subject}\n📄 ${lecture}`
         });
       } else {
-        // ملف صغير — من GitHub
         const fileUrl = `${RAW_BASE}/${encodeURIComponent(fileVal)}`;
         await telegramRequest("sendDocument", {
           chat_id:  chatId,
@@ -178,14 +226,27 @@ export default async function handler(req, res) {
   if (req.method === "GET") {
     return res.status(200).send("البوت شغال ✅");
   }
+
   if (req.method === "POST") {
     const update = req.body;
-    if (update?.message?.text?.startsWith("/start")) {
-      await handleStart(update.message.chat.id);
+
+    if (update?.message) {
+      const msg       = update.message;
+      const chatId    = msg.chat.id;
+      const text      = msg.text || "";
+      const firstName = msg.from?.first_name || "";
+
+      if (text.startsWith("/start")) {
+        await handleStart(chatId, firstName);
+      } else if (text.startsWith("/stats")) {
+        await handleStats(chatId);
+      }
     } else if (update?.callback_query) {
       await handleCallback(update.callback_query);
     }
+
     return res.status(200).send("OK");
   }
+
   res.status(405).send("Method Not Allowed");
 }
