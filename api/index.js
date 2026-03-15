@@ -103,7 +103,7 @@ function backKeyboard() {
 async function handleStart(chatId) {
   await telegramRequest("sendMessage", {
     chat_id:      chatId,
-    text:         "👋 أهلاً! اختر المادة لتصفح الشيتات:",
+    text:         "👋 وخالتك ام تشيل في المحمر والمقمر كيف ماجايب لونججيي!",
     reply_markup: subjectsKeyboard()
   });
 }
