@@ -3,7 +3,11 @@ import path from "path";
 import https from "https";
 
 const TOKEN    = process.env.TOKEN;
-const API_BASE = `https://api.telegram.org/bot${TOKEN}`;
+const GITHUB_USER = process.env.GITHUB_USER || "waelalhouri04-netizen";
+const GITHUB_REPO = process.env.GITHUB_REPO || "Telegram-USTsheets3-ForFirstYear-Bot";
+const GITHUB_BRANCH = "main";
+
+const RAW_BASE = `https://github.com/${GITHUB_USER}/${GITHUB_REPO}/raw/${GITHUB_BRANCH}/files`;
 
 const ALL_SUBJECTS = [
   "Physics", "Chemistry", "Computer",
@@ -34,7 +38,8 @@ function getSubjects() {
     const lecture    = name.slice(dash + 1);
     const subject    = subjectMap[rawSubject.toLowerCase()] || rawSubject;
     if (!subjects[subject]) subjects[subject] = {};
-    subjects[subject][lecture] = path.join(filesDir, filename);
+    // نحفظ اسم الملف فقط عشان نبني الرابط لاحقاً
+    subjects[subject][lecture] = filename;
   });
 
   return subjects;
@@ -57,39 +62,6 @@ function telegramRequest(method, body) {
     });
     req.on("error", () => resolve(null));
     req.write(data);
-    req.end();
-  });
-}
-
-// ── إرسال ملف PDF ──
-function sendDocument(chatId, filePath, caption) {
-  return new Promise((resolve) => {
-    const boundary = "----FormBoundary" + Math.random().toString(36).slice(2);
-    const fileData = fs.readFileSync(filePath);
-    const filename = path.basename(filePath);
-
-    const pre  = Buffer.from(
-      `--${boundary}\r\nContent-Disposition: form-data; name="chat_id"\r\n\r\n${chatId}\r\n` +
-      (caption ? `--${boundary}\r\nContent-Disposition: form-data; name="caption"\r\n\r\n${caption}\r\n` : "") +
-      `--${boundary}\r\nContent-Disposition: form-data; name="document"; filename="${filename}"\r\nContent-Type: application/pdf\r\n\r\n`
-    );
-    const post = Buffer.from(`\r\n--${boundary}--\r\n`);
-    const body = Buffer.concat([pre, fileData, post]);
-
-    const options = {
-      hostname: "api.telegram.org",
-      path:     `/bot${TOKEN}/sendDocument`,
-      method:   "POST",
-      headers:  { "Content-Type": `multipart/form-data; boundary=${boundary}`, "Content-Length": body.length }
-    };
-
-    const req = https.request(options, (res) => {
-      let raw = "";
-      res.on("data", chunk => raw += chunk);
-      res.on("end", () => resolve(JSON.parse(raw)));
-    });
-    req.on("error", () => resolve(null));
-    req.write(body);
     req.end();
   });
 }
@@ -120,10 +92,10 @@ async function handleStart(chatId) {
 }
 
 async function handleCallback(callback) {
-  const queryId = callback.id;
-  const chatId  = callback.message.chat.id;
-  const msgId   = callback.message.message_id;
-  const data    = callback.data;
+  const queryId  = callback.id;
+  const chatId   = callback.message.chat.id;
+  const msgId    = callback.message.message_id;
+  const data     = callback.data;
   const subjects = getSubjects();
 
   await telegramRequest("answerCallbackQuery", { callback_query_id: queryId });
@@ -148,9 +120,16 @@ async function handleCallback(callback) {
   } else if (data.startsWith("lec|")) {
     const rest               = data.slice(4);
     const [subject, lecture] = rest.split("|||");
-    const filePath           = subjects[subject]?.[lecture];
-    if (filePath && fs.existsSync(filePath)) {
-      await sendDocument(chatId, filePath, `📚 ${subject}\n📄 ${lecture}`);
+    const filename           = subjects[subject]?.[lecture];
+
+    if (filename) {
+      // نرسل الملف عبر رابط GitHub المباشر
+      const fileUrl = `${RAW_BASE}/${encodeURIComponent(filename)}`;
+      await telegramRequest("sendDocument", {
+        chat_id:  chatId,
+        document: fileUrl,
+        caption:  `📚 ${subject}\n📄 ${lecture}`
+      });
     } else {
       await telegramRequest("sendMessage", { chat_id: chatId, text: "❌ الملف غير موجود." });
     }
