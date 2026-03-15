@@ -14,12 +14,6 @@ TOKEN = os.environ.get("TOKEN")
 if not TOKEN:
     raise ValueError("❌ لم يتم ضبط متغير البيئة TOKEN")
 
-RENDER_URL = os.environ.get("RENDER_EXTERNAL_URL")
-if not RENDER_URL:
-    raise ValueError("❌ لم يتم ضبط متغير البيئة RENDER_EXTERNAL_URL")
-
-PORT = int(os.environ.get("PORT", 5000))
-
 FILES_DIR = "files"
 os.makedirs(FILES_DIR, exist_ok=True)
 
@@ -60,12 +54,12 @@ def get_subjects() -> dict:
     for filename in os.listdir(FILES_DIR):
         if not filename.lower().endswith(".pdf"):
             continue
-        name = filename[:-4]          # بدون .pdf
+        name = filename[:-4]
         dash = name.find("-")
         if dash == -1:
-            continue                  # تجاهل ملفات بدون شرطة
+            continue
         subject = name[:dash]
-        lecture = name[dash + 1:]     # اسم المحاضرة (ممكن يحتوي على شرطة)
+        lecture = name[dash + 1:]
         subjects.setdefault(subject, {})[lecture] = os.path.join(FILES_DIR, filename)
     return subjects
 
@@ -94,7 +88,7 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ── عرض محاضرات مادة معينة ──
     if data.startswith("sub|"):
-        subject = data[4:]            # كل شيء بعد "sub|"
+        subject = data[4:]
         lectures = subjects.get(subject, {})
 
         if not lectures:
@@ -106,7 +100,6 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-        # ترتيب طبيعي (1، 2، 3 ... 10 وليس 1، 10، 2)
         sorted_lectures = sorted(lectures.keys(), key=natural_sort_key)
         buttons = [
             [InlineKeyboardButton(f"📄 {lec}", callback_data=f"lec|{subject}|||{lec}")]
@@ -121,9 +114,8 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ── إرسال ملف محاضرة ──
     elif data.startswith("lec|"):
-        # الفاصل "|||" لتجنب مشكلة الشرطة العمودية في أسماء الملفات
         _, subject, lecture = data.split("|||", 1)
-        subject = subject[4:]         # إزالة "lec|" من البداية
+        subject = subject[4:]
         file_path = subjects.get(subject, {}).get(lecture)
 
         if file_path and os.path.exists(file_path):
@@ -155,7 +147,7 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     user_id = update.message.from_user.id
     if user_id not in ALLOWED_USERS:
-        await update.message.reply_text("❌ غير مصرح برفع الملفات الا لـ الجنخر وائل بالهمزة")
+        await update.message.reply_text("❌ غير مصرح برفع الملفات الا لـ الجنخر وائل")
         return
 
     doc = update.message.document
@@ -189,8 +181,5 @@ app.add_handler(CommandHandler("start", start))
 app.add_handler(CallbackQueryHandler(button))
 app.add_handler(MessageHandler(filters.Document.ALL, handle_file))
 
-app.run_webhook(
-    listen="0.0.0.0",
-    port=PORT,
-    webhook_url=f"{RENDER_URL}/bot{TOKEN}"
-)
+print("✅ البوت شغال...")
+app.run_polling()
