@@ -2,12 +2,17 @@ import fs from "fs";
 import path from "path";
 import https from "https";
 
-const TOKEN    = process.env.TOKEN;
-const GITHUB_USER = process.env.GITHUB_USER || "waelalhouri04-netizen";
-const GITHUB_REPO = process.env.GITHUB_REPO || "Telegram-USTsheets3-ForFirstYear-Bot";
+const TOKEN         = process.env.TOKEN;
+const GITHUB_USER   = "waelalhouri04-netizen";
+const GITHUB_REPO   = "Telegram-USTsheets3-ForFirstYear-Bot";
 const GITHUB_BRANCH = "main";
+const RAW_BASE      = `https://github.com/${GITHUB_USER}/${GITHUB_REPO}/raw/${GITHUB_BRANCH}/files`;
 
-const RAW_BASE = `https://github.com/${GITHUB_USER}/${GITHUB_REPO}/raw/${GITHUB_BRANCH}/files`;
+// ── ملفات كبيرة على Google Drive ──
+// الصيغة: "SubjectName-lectureName": "DRIVE_FILE_ID"
+const DRIVE_FILES = {
+  "English-lec-1": "1wHn3MTvF-fLx9LuYgyRpMfCBARDfFWl6"
+};
 
 const ALL_SUBJECTS = [
   "Physics", "Chemistry", "Computer",
@@ -15,12 +20,10 @@ const ALL_SUBJECTS = [
   "Materials", "History"
 ];
 
-// ── ترتيب طبيعي للأرقام ──
 function naturalSort(a, b) {
   return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
 }
 
-// ── قراءة الملفات من مجلد files/ ──
 function getSubjects() {
   const subjects   = {};
   const subjectMap = {};
@@ -38,14 +41,24 @@ function getSubjects() {
     const lecture    = name.slice(dash + 1);
     const subject    = subjectMap[rawSubject.toLowerCase()] || rawSubject;
     if (!subjects[subject]) subjects[subject] = {};
-    // نحفظ اسم الملف فقط عشان نبني الرابط لاحقاً
     subjects[subject][lecture] = filename;
+  });
+
+  // أضف ملفات Drive لو ما هي موجودة في GitHub
+  Object.keys(DRIVE_FILES).forEach(key => {
+    const dash    = key.indexOf("-");
+    const rawSub  = key.slice(0, dash);
+    const lecture = key.slice(dash + 1);
+    const subject = subjectMap[rawSub.toLowerCase()] || rawSub;
+    if (!subjects[subject]) subjects[subject] = {};
+    if (!subjects[subject][lecture]) {
+      subjects[subject][lecture] = `drive:${key}`;
+    }
   });
 
   return subjects;
 }
 
-// ── إرسال طلب لـ Telegram API ──
 function telegramRequest(method, body) {
   return new Promise((resolve) => {
     const data    = JSON.stringify(body);
@@ -66,7 +79,6 @@ function telegramRequest(method, body) {
   });
 }
 
-// ── بناء الأزرار ──
 function subjectsKeyboard() {
   return { inline_keyboard: ALL_SUBJECTS.map(s => [{ text: `📘 ${s}`, callback_data: `sub|${s}` }]) };
 }
@@ -82,7 +94,6 @@ function backKeyboard() {
   return { inline_keyboard: [[{ text: "🔙 رجوع", callback_data: "back" }]] };
 }
 
-// ── معالجة الأحداث ──
 async function handleStart(chatId) {
   await telegramRequest("sendMessage", {
     chat_id:      chatId,
@@ -120,11 +131,21 @@ async function handleCallback(callback) {
   } else if (data.startsWith("lec|")) {
     const rest               = data.slice(4);
     const [subject, lecture] = rest.split("|||");
-    const filename           = subjects[subject]?.[lecture];
+    const fileVal            = subjects[subject]?.[lecture];
 
-    if (filename) {
-      // نرسل الملف عبر رابط GitHub المباشر
-      const fileUrl = `${RAW_BASE}/${encodeURIComponent(filename)}`;
+    if (fileVal) {
+      let fileUrl;
+
+      if (fileVal.startsWith("drive:")) {
+        // ملف على Google Drive
+        const driveKey = fileVal.slice(6);
+        const driveId  = DRIVE_FILES[driveKey];
+        fileUrl = `https://drive.google.com/uc?export=download&id=${driveId}`;
+      } else {
+        // ملف على GitHub
+        fileUrl = `${RAW_BASE}/${encodeURIComponent(fileVal)}`;
+      }
+
       await telegramRequest("sendDocument", {
         chat_id:  chatId,
         document: fileUrl,
@@ -143,12 +164,10 @@ async function handleCallback(callback) {
   }
 }
 
-// ── Vercel Handler ──
 export default async function handler(req, res) {
   if (req.method === "GET") {
     return res.status(200).send("البوت شغال ✅");
   }
-
   if (req.method === "POST") {
     const update = req.body;
     if (update?.message?.text?.startsWith("/start")) {
@@ -158,6 +177,5 @@ export default async function handler(req, res) {
     }
     return res.status(200).send("OK");
   }
-
   res.status(405).send("Method Not Allowed");
 }
