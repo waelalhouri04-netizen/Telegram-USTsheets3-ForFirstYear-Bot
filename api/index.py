@@ -2,20 +2,16 @@ import os
 import re
 import json
 import requests
-from http.server import BaseHTTPRequestHandler
+from flask import Flask, request, Response
 
-# ──────────────────────────────────────────
-# إعداد المتغيرات
-# ──────────────────────────────────────────
+app = Flask(__name__)
+
 TOKEN = os.environ.get("TOKEN")
 API   = f"https://api.telegram.org/bot{TOKEN}"
 
 BASE_DIR  = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FILES_DIR = os.path.join(BASE_DIR, "files")
 
-# ──────────────────────────────────────────
-# المواد المتاحة
-# ──────────────────────────────────────────
 ALL_SUBJECTS = [
     "Physics", "Chemistry", "Computer",
     "Calculus", "Linear", "English",
@@ -23,20 +19,14 @@ ALL_SUBJECTS = [
 ]
 
 
-# ──────────────────────────────────────────
-# ترتيب طبيعي للأرقام
-# ──────────────────────────────────────────
-def natural_sort_key(text: str):
+def natural_sort_key(text):
     return [
         int(c) if c.isdigit() else c.lower()
         for c in re.split(r'(\d+)', text)
     ]
 
 
-# ──────────────────────────────────────────
-# قراءة الملفات — غير حساس للحروف الكبيرة
-# ──────────────────────────────────────────
-def get_subjects() -> dict:
+def get_subjects():
     subjects    = {}
     subject_map = {s.lower(): s for s in ALL_SUBJECTS}
     if not os.path.exists(FILES_DIR):
@@ -55,9 +45,6 @@ def get_subjects() -> dict:
     return subjects
 
 
-# ──────────────────────────────────────────
-# دوال إرسال Telegram
-# ──────────────────────────────────────────
 def send_message(chat_id, text, reply_markup=None):
     data = {"chat_id": chat_id, "text": text}
     if reply_markup:
@@ -85,9 +72,6 @@ def answer_callback(callback_id):
                   json={"callback_query_id": callback_id})
 
 
-# ──────────────────────────────────────────
-# بناء الأزرار
-# ──────────────────────────────────────────
 def subjects_keyboard():
     return {
         "inline_keyboard": [
@@ -110,9 +94,6 @@ def back_keyboard():
     return {"inline_keyboard": [[{"text": "🔙 رجوع", "callback_data": "back"}]]}
 
 
-# ──────────────────────────────────────────
-# معالجة الأحداث
-# ──────────────────────────────────────────
 def handle_start(chat_id):
     send_message(chat_id,
                  "👋 أهلاً! اختر المادة لتصفح الشيتات:",
@@ -156,34 +137,20 @@ def handle_callback(callback):
                      reply_markup=subjects_keyboard())
 
 
-# ──────────────────────────────────────────
-# Vercel Handler — الاسم لازم يكون "handler"
-# ──────────────────────────────────────────
-class handler(BaseHTTPRequestHandler):
+@app.route("/api/index", methods=["GET"])
+def get_index():
+    return Response("البوت شغال ✅", status=200, mimetype="text/plain; charset=utf-8")
 
-    def do_GET(self):
-        self.send_response(200)
-        self.send_header("Content-Type", "text/plain; charset=utf-8")
-        self.end_headers()
-        self.wfile.write("البوت شغال ✅".encode("utf-8"))
 
-    def do_POST(self):
-        length = int(self.headers.get("Content-Length", 0))
-        body   = self.rfile.read(length)
-        try:
-            update = json.loads(body)
-            if "message" in update:
-                msg  = update["message"]
-                text = msg.get("text", "")
-                if text.startswith("/start"):
-                    handle_start(msg["chat"]["id"])
-            elif "callback_query" in update:
-                handle_callback(update["callback_query"])
-        except Exception:
-            pass
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(b"OK")
-
-    def log_message(self, *args):
-        pass
+@app.route("/api/index", methods=["POST"])
+def post_index():
+    update = request.get_json(force=True, silent=True)
+    if update:
+        if "message" in update:
+            msg  = update["message"]
+            text = msg.get("text", "")
+            if text.startswith("/start"):
+                handle_start(msg["chat"]["id"])
+        elif "callback_query" in update:
+            handle_callback(update["callback_query"])
+    return Response("OK", status=200)
