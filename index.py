@@ -2,16 +2,17 @@ import os
 import re
 import json
 import requests
-from http.server import BaseHTTPRequestHandler
+from flask import Flask, request
+
+app = Flask(__name__)
 
 # ──────────────────────────────────────────
 # إعداد المتغيرات
 # ──────────────────────────────────────────
-TOKEN = os.environ.get("TOKEN")
-API = f"https://api.telegram.org/bot{TOKEN}"
+TOKEN   = os.environ.get("TOKEN")
+API     = f"https://api.telegram.org/bot{TOKEN}"
 
-# مسار مجلد الملفات (بجانب مجلد api/)
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASE_DIR  = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FILES_DIR = os.path.join(BASE_DIR, "files")
 
 # ──────────────────────────────────────────
@@ -38,19 +39,14 @@ def natural_sort_key(text: str):
 # قراءة الملفات من المجلد
 # ──────────────────────────────────────────
 def get_subjects() -> dict:
-    """
-    يقرأ ملفات PDF من مجلد files/
-    اتفاقية التسمية: SubjectName-LectureName.pdf
-    مثال: Physics-Lecture1.pdf
-    """
     subjects = {}
     if not os.path.exists(FILES_DIR):
         return subjects
     for filename in os.listdir(FILES_DIR):
         if not filename.lower().endswith(".pdf"):
             continue
-        name = filename[:-4]
-        dash = name.find("-")
+        name  = filename[:-4]
+        dash  = name.find("-")
         if dash == -1:
             continue
         subject = name[:dash]
@@ -87,7 +83,8 @@ def send_document(chat_id, file_path, caption=None):
 
 
 def answer_callback(callback_id):
-    requests.post(f"{API}/answerCallbackQuery", json={"callback_query_id": callback_id})
+    requests.post(f"{API}/answerCallbackQuery",
+                  json={"callback_query_id": callback_id})
 
 
 # ──────────────────────────────────────────
@@ -103,10 +100,10 @@ def subjects_keyboard():
 
 
 def lectures_keyboard(subject, lectures):
-    sorted_lectures = sorted(lectures.keys(), key=natural_sort_key)
+    sorted_lecs = sorted(lectures.keys(), key=natural_sort_key)
     buttons = [
         [{"text": f"📄 {lec}", "callback_data": f"lec|{subject}|||{lec}"}]
-        for lec in sorted_lectures
+        for lec in sorted_lecs
     ]
     buttons.append([{"text": "🔙 رجوع", "callback_data": "back"}])
     return {"inline_keyboard": buttons}
@@ -117,22 +114,23 @@ def back_keyboard():
 
 
 # ──────────────────────────────────────────
-# معالجة الأوامر والأزرار
+# معالجة الأحداث
 # ──────────────────────────────────────────
 def handle_start(chat_id):
-    send_message(chat_id, "👋 أهلاً! اختر المادة لتصفح الشيتات:", reply_markup=subjects_keyboard())
+    send_message(chat_id,
+                 "👋 أهلاً! اختر المادة لتصفح الشيتات:",
+                 reply_markup=subjects_keyboard())
 
 
 def handle_callback(callback):
-    query_id  = callback["id"]
-    chat_id   = callback["message"]["chat"]["id"]
-    msg_id    = callback["message"]["message_id"]
-    data      = callback["data"]
-    subjects  = get_subjects()
+    query_id = callback["id"]
+    chat_id  = callback["message"]["chat"]["id"]
+    msg_id   = callback["message"]["message_id"]
+    data     = callback["data"]
+    subjects = get_subjects()
 
     answer_callback(query_id)
 
-    # ── قائمة المواد ──
     if data.startswith("sub|"):
         subject  = data[4:]
         lectures = subjects.get(subject, {})
@@ -145,18 +143,16 @@ def handle_callback(callback):
                          f"📖 {subject} — اختر الشيت:",
                          reply_markup=lectures_keyboard(subject, lectures))
 
-    # ── إرسال ملف ──
     elif data.startswith("lec|"):
-        rest              = data[4:]
-        subject, lecture  = rest.split("|||", 1)
-        file_path         = subjects.get(subject, {}).get(lecture)
+        rest             = data[4:]
+        subject, lecture = rest.split("|||", 1)
+        file_path        = subjects.get(subject, {}).get(lecture)
         if file_path and os.path.exists(file_path):
             send_document(chat_id, file_path,
                           caption=f"📚 {subject}\n📄 {lecture}")
         else:
             send_message(chat_id, "❌ الملف غير موجود.")
 
-    # ── رجوع ──
     elif data == "back":
         edit_message(chat_id, msg_id,
                      "📚 اختر المادة:",
@@ -164,29 +160,24 @@ def handle_callback(callback):
 
 
 # ──────────────────────────────────────────
-# Vercel Serverless Handler
+# Webhook Route
 # ──────────────────────────────────────────
-class handler(BaseHTTPRequestHandler):
+@app.route("/webhook", methods=["POST"])
+def webhook():
+    update = request.get_json(force=True)
 
-    def do_POST(self):
-        length = int(self.headers.get("Content-Length", 0))
-        body   = self.rfile.read(length)
-        update = json.loads(body)
+    if "message" in update:
+        msg  = update["message"]
+        text = msg.get("text", "")
+        if text.startswith("/start"):
+            handle_start(msg["chat"]["id"])
 
-        # أمر /start
-        if "message" in update:
-            msg  = update["message"]
-            text = msg.get("text", "")
-            if text.startswith("/start"):
-                handle_start(msg["chat"]["id"])
+    elif "callback_query" in update:
+        handle_callback(update["callback_query"])
 
-        # ضغطة زر
-        elif "callback_query" in update:
-            handle_callback(update["callback_query"])
+    return "OK", 200
 
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(b"OK")
 
-    def log_message(self, *args):
-        pass  # إخفاء logs غير الضرورية
+@app.route("/", methods=["GET"])
+def index():
+    return "البوت شغال ✅", 200
