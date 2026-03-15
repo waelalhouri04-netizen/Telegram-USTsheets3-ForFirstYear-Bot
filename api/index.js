@@ -256,24 +256,26 @@ function buildScheduleText() {
 }
 
 async function buildProgressText(userId, subjects) {
-  const progress = await getUserProgress(userId, subjects);
-  let text       = "📈 تقدمك الدراسي\n\n";
-  let totalAll   = 0;
+  const progress  = await getUserProgress(userId, subjects);
+  let text        = "📈 تقدمك الدراسي\n\n";
+  let totalAll    = 0;
   let reviewedAll = 0;
 
   for (const [subject, { reviewed, total }] of Object.entries(progress)) {
     if (total === 0) continue;
     totalAll    += total;
     reviewedAll += reviewed;
-    const pct   = Math.round((reviewed / total) * 100);
-    const bars  = Math.round(pct / 10);
-    const bar   = "█".repeat(bars) + "░".repeat(10 - bars);
-    const badge = pct === 100 ? " ✅" : "";
-    text += `📖 ${subject}\n${bar} ${reviewed}/${total} (${pct}%)${badge}\n\n`;
+    const pct    = Math.round((reviewed / total) * 100);
+    const filled = Math.round(pct / 10);
+    const bar    = "🟩".repeat(filled) + "⬜".repeat(10 - filled);
+    const badge  = pct === 100 ? " ✅" : "";
+    text += `${subject}\n${bar}  ${reviewed}/${total}  ${pct}%${badge}\n\n`;
   }
 
   const totalPct = totalAll > 0 ? Math.round((reviewedAll / totalAll) * 100) : 0;
-  text += `━━━━━━━━━━━━━━━\n🎯 الإجمالي: ${reviewedAll}/${totalAll} (${totalPct}%)`;
+  const totalFilled = Math.round(totalPct / 10);
+  const totalBar    = "🟩".repeat(totalFilled) + "⬜".repeat(10 - totalFilled);
+  text += `━━━━━━━━━━━━━━━\n🎯 الإجمالي\n${totalBar}  ${reviewedAll}/${totalAll}  ${totalPct}%`;
   return text;
 }
 
