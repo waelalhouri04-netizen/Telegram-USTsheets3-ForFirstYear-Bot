@@ -4,6 +4,8 @@ import os
 
 # التوكن من Environment Variable
 TOKEN = os.environ.get("TOKEN")
+if not TOKEN:
+    raise ValueError("❌ لم يتم ضبط متغير البيئة TOKEN")
 
 FILES_DIR = "files"
 if not os.path.exists(FILES_DIR):
@@ -39,13 +41,12 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     subjects = get_subjects()
 
-    # عند اختيار مادة
+    # اختيار مادة
     if data.startswith("sub|"):
         subject = data.split("|")[1]
         lectures = subjects.get(subject, {})
 
         if not lectures:
-            # رسالة إذا لا توجد محاضرات
             buttons = [[InlineKeyboardButton("🔙 رجوع", callback_data="back")]]
             await query.edit_message_text(
                 f"📖 {subject}\n⚠️ لا توجد محاضرات متوفرة بعد.",
@@ -57,12 +58,11 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         buttons.append([InlineKeyboardButton("🔙 رجوع", callback_data="back")])
         await query.edit_message_text(f"📖 {subject}", reply_markup=InlineKeyboardMarkup(buttons))
 
-    # عند اختيار محاضرة
+    # اختيار محاضرة
     elif data.startswith("lec|"):
         _, subject, lecture = data.split("|")
         file = subjects.get(subject, {}).get(lecture)
         if file and os.path.exists(file):
-            # فتح الملف وإرساله
             with open(file, "rb") as f:
                 await query.message.reply_document(f)
             await query.message.reply_text(f"✅ تم إرسال المحاضرة: {lecture}")
@@ -80,7 +80,7 @@ ALLOWED_USERS = [1277382550]
 async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     if user_id not in ALLOWED_USERS:
-        await update.message.reply_text("❌ هذا البوت خاص بـ الجنخر وائل فقط")
+        await update.message.reply_text("❌ هذا البوت خاص ـ الجنخر وائل فقط")
         return
 
     file = await update.message.document.get_file()
@@ -89,9 +89,14 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await file.download_to_drive(path)
     await update.message.reply_text(f"✅ تم حفظ الملف:\n{file_name}")
 
+# تشغيل البوت
 app = ApplicationBuilder().token(TOKEN).build()
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CallbackQueryHandler(button))
 app.add_handler(MessageHandler(filters.Document.ALL, handle_file))
+
+# لأمان Render Web Service
+PORT = int(os.environ.get("PORT", 5000))
+print(f"🤖 البوت جاهز ويعمل على المنفذ {PORT}")
 
 app.run_polling()
