@@ -3,45 +3,48 @@ import path from "path";
 import https from "https";
 
 const TOKEN         = process.env.TOKEN;
-const ADMIN_ID      = 1277382550; // رقمك — يستلم الإشعارات
+const ADMIN_ID      = 1277382550;
 const GITHUB_USER   = "waelalhouri04-netizen";
 const GITHUB_REPO   = "Telegram-USTsheets3-ForFirstYear-Bot";
 const GITHUB_BRANCH = "main";
 const RAW_BASE      = `https://github.com/${GITHUB_USER}/${GITHUB_REPO}/raw/${GITHUB_BRANCH}/files`;
 
-// ── Upstash Redis ──
 const REDIS_URL   = process.env.KV_REST_API_URL;
 const REDIS_TOKEN = process.env.KV_REST_API_TOKEN;
 
+// ── Redis ──
 async function redisRequest(method, ...args) {
   if (!REDIS_URL || !REDIS_TOKEN) return null;
   try {
-    const res = await fetch(`${REDIS_URL}/${method}/${args.join("/")}`, {
-      headers: { Authorization: `Bearer ${REDIS_TOKEN}` }
-    });
+    const url  = `${REDIS_URL}/${[method, ...args].join("/")}`;
+    const res  = await fetch(url, { headers: { Authorization: `Bearer ${REDIS_TOKEN}` } });
     const data = await res.json();
-    return data.result;
+    return data.result ?? null;
   } catch {
     return null;
   }
 }
 
-// زيادة عداد الإحصائيات
-async function trackDownload(subject, lecture) {
-  await redisRequest("incr", `downloads:${subject}:${lecture}`);
+async function trackDownload(subject) {
   await redisRequest("incr", "downloads:total");
+  await redisRequest("incr", `subject:${subject}`);
 }
 
-// حفظ معرف المستخدم
 async function trackUser(userId) {
   await redisRequest("sadd", "users", userId);
 }
 
-// جلب الإحصائيات
 async function getStats() {
-  const total   = await redisRequest("get", "downloads:total") || 0;
-  const users   = await redisRequest("scard", "users") || 0;
-  return { total, users };
+  const total = parseInt(await redisRequest("get", "downloads:total") || 0);
+  const users = parseInt(await redisRequest("scard", "users") || 0);
+
+  const subjectStats = {};
+  for (const subject of ALL_SUBJECTS) {
+    const count = parseInt(await redisRequest("get", `subject:${subject}`) || 0);
+    if (count > 0) subjectStats[subject] = count;
+  }
+
+  return { total, users, subjectStats };
 }
 
 // ── ملفات كبيرة ──
@@ -151,10 +154,17 @@ async function handleStats(chatId) {
     await telegramRequest("sendMessage", { chat_id: chatId, text: "❌ هذا الأمر للمشرف فقط." });
     return;
   }
-  const { total, users } = await getStats();
+
+  const { total, users, subjectStats } = await getStats();
+
+  const sorted = Object.entries(subjectStats).sort((a, b) => b[1] - a[1]);
+  const subjectLines = sorted.length > 0
+    ? sorted.map(([s, c]) => `📖 ${s}: ${c} تحميل`).join("\n")
+    : "لا توجد بيانات بعد";
+
   await telegramRequest("sendMessage", {
     chat_id: chatId,
-    text:    `📊 الإحصائيات:\n\n👥 المستخدمون: ${users}\n📥 إجمالي التحميلات: ${total}`
+    text:    `📊 الإحصائيات:\n\n👥 المستخدمون: ${users}\n📥 إجمالي التحميلات: ${total}\n\n📚 تفاصيل المواد:\n${subjectLines}`
   });
 }
 
@@ -190,8 +200,7 @@ async function handleCallback(callback) {
     const fileVal            = subjects[subject]?.[lecture];
 
     if (fileVal) {
-      // تسجيل الإحصائيات
-      await trackDownload(subject, lecture);
+      await trackDownload(subject);
 
       if (fileVal.startsWith("fileid:")) {
         const key    = fileVal.slice(7);
