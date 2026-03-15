@@ -1,0 +1,192 @@
+import os
+import re
+import json
+import requests
+from http.server import BaseHTTPRequestHandler
+
+# ──────────────────────────────────────────
+# إعداد المتغيرات
+# ──────────────────────────────────────────
+TOKEN = os.environ.get("TOKEN")
+API = f"https://api.telegram.org/bot{TOKEN}"
+
+# مسار مجلد الملفات (بجانب مجلد api/)
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+FILES_DIR = os.path.join(BASE_DIR, "files")
+
+# ──────────────────────────────────────────
+# المواد المتاحة
+# ──────────────────────────────────────────
+ALL_SUBJECTS = [
+    "Physics", "Chemistry", "Computer",
+    "Calculus", "Linear", "English",
+    "Materials", "History"
+]
+
+
+# ──────────────────────────────────────────
+# ترتيب طبيعي للأرقام
+# ──────────────────────────────────────────
+def natural_sort_key(text: str):
+    return [
+        int(c) if c.isdigit() else c.lower()
+        for c in re.split(r'(\d+)', text)
+    ]
+
+
+# ──────────────────────────────────────────
+# قراءة الملفات من المجلد
+# ──────────────────────────────────────────
+def get_subjects() -> dict:
+    """
+    يقرأ ملفات PDF من مجلد files/
+    اتفاقية التسمية: SubjectName-LectureName.pdf
+    مثال: Physics-Lecture1.pdf
+    """
+    subjects = {}
+    if not os.path.exists(FILES_DIR):
+        return subjects
+    for filename in os.listdir(FILES_DIR):
+        if not filename.lower().endswith(".pdf"):
+            continue
+        name = filename[:-4]
+        dash = name.find("-")
+        if dash == -1:
+            continue
+        subject = name[:dash]
+        lecture = name[dash + 1:]
+        subjects.setdefault(subject, {})[lecture] = os.path.join(FILES_DIR, filename)
+    return subjects
+
+
+# ──────────────────────────────────────────
+# دوال إرسال Telegram
+# ──────────────────────────────────────────
+def send_message(chat_id, text, reply_markup=None, parse_mode=None):
+    data = {"chat_id": chat_id, "text": text}
+    if reply_markup:
+        data["reply_markup"] = json.dumps(reply_markup)
+    if parse_mode:
+        data["parse_mode"] = parse_mode
+    requests.post(f"{API}/sendMessage", json=data)
+
+
+def edit_message(chat_id, message_id, text, reply_markup=None):
+    data = {"chat_id": chat_id, "message_id": message_id, "text": text}
+    if reply_markup:
+        data["reply_markup"] = json.dumps(reply_markup)
+    requests.post(f"{API}/editMessageText", json=data)
+
+
+def send_document(chat_id, file_path, caption=None):
+    with open(file_path, "rb") as f:
+        data = {"chat_id": chat_id}
+        if caption:
+            data["caption"] = caption
+        requests.post(f"{API}/sendDocument", files={"document": f}, data=data)
+
+
+def answer_callback(callback_id):
+    requests.post(f"{API}/answerCallbackQuery", json={"callback_query_id": callback_id})
+
+
+# ──────────────────────────────────────────
+# بناء قوائم الأزرار
+# ──────────────────────────────────────────
+def subjects_keyboard():
+    return {
+        "inline_keyboard": [
+            [{"text": f"📘 {sub}", "callback_data": f"sub|{sub}"}]
+            for sub in ALL_SUBJECTS
+        ]
+    }
+
+
+def lectures_keyboard(subject, lectures):
+    sorted_lectures = sorted(lectures.keys(), key=natural_sort_key)
+    buttons = [
+        [{"text": f"📄 {lec}", "callback_data": f"lec|{subject}|||{lec}"}]
+        for lec in sorted_lectures
+    ]
+    buttons.append([{"text": "🔙 رجوع", "callback_data": "back"}])
+    return {"inline_keyboard": buttons}
+
+
+def back_keyboard():
+    return {"inline_keyboard": [[{"text": "🔙 رجوع", "callback_data": "back"}]]}
+
+
+# ──────────────────────────────────────────
+# معالجة الأوامر والأزرار
+# ──────────────────────────────────────────
+def handle_start(chat_id):
+    send_message(chat_id, "👋 أهلاً! اختر المادة لتصفح الشيتات:", reply_markup=subjects_keyboard())
+
+
+def handle_callback(callback):
+    query_id  = callback["id"]
+    chat_id   = callback["message"]["chat"]["id"]
+    msg_id    = callback["message"]["message_id"]
+    data      = callback["data"]
+    subjects  = get_subjects()
+
+    answer_callback(query_id)
+
+    # ── قائمة المواد ──
+    if data.startswith("sub|"):
+        subject  = data[4:]
+        lectures = subjects.get(subject, {})
+        if not lectures:
+            edit_message(chat_id, msg_id,
+                         f"📖 {subject}\n⚠️ لا توجد شيتات متوفرة بعد.",
+                         reply_markup=back_keyboard())
+        else:
+            edit_message(chat_id, msg_id,
+                         f"📖 {subject} — اختر الشيت:",
+                         reply_markup=lectures_keyboard(subject, lectures))
+
+    # ── إرسال ملف ──
+    elif data.startswith("lec|"):
+        rest              = data[4:]
+        subject, lecture  = rest.split("|||", 1)
+        file_path         = subjects.get(subject, {}).get(lecture)
+        if file_path and os.path.exists(file_path):
+            send_document(chat_id, file_path,
+                          caption=f"📚 {subject}\n📄 {lecture}")
+        else:
+            send_message(chat_id, "❌ الملف غير موجود.")
+
+    # ── رجوع ──
+    elif data == "back":
+        edit_message(chat_id, msg_id,
+                     "📚 اختر المادة:",
+                     reply_markup=subjects_keyboard())
+
+
+# ──────────────────────────────────────────
+# Vercel Serverless Handler
+# ──────────────────────────────────────────
+class handler(BaseHTTPRequestHandler):
+
+    def do_POST(self):
+        length = int(self.headers.get("Content-Length", 0))
+        body   = self.rfile.read(length)
+        update = json.loads(body)
+
+        # أمر /start
+        if "message" in update:
+            msg  = update["message"]
+            text = msg.get("text", "")
+            if text.startswith("/start"):
+                handle_start(msg["chat"]["id"])
+
+        # ضغطة زر
+        elif "callback_query" in update:
+            handle_callback(update["callback_query"])
+
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"OK")
+
+    def log_message(self, *args):
+        pass  # إخفاء logs غير الضرورية
