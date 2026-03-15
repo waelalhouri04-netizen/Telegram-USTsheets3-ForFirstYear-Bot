@@ -92,18 +92,18 @@ function subjectsKeyboard() {
 function lecturesKeyboard(subject, lectures) {
   const sorted  = Object.keys(lectures).sort(naturalSort);
   const buttons = sorted.map(lec => [{ text: `📄 ${lec}`, callback_data: `lec|${subject}|||${lec}` }]);
-  buttons.push([{ text: "🔙 رجوع", callback_data: "back" }]);
+  buttons.push([{ text: "🔙 ورا", callback_data: "back" }]);
   return { inline_keyboard: buttons };
 }
 
 function backKeyboard() {
-  return { inline_keyboard: [[{ text: "🔙 رجوع", callback_data: "back" }]] };
+  return { inline_keyboard: [[{ text: "🔙 ورا", callback_data: "back" }]] };
 }
 
 async function handleStart(chatId) {
   await telegramRequest("sendMessage", {
     chat_id:      chatId,
-    text:         "👋 وخالتك ام تشيل في المحمر والمقمر كيف ماجايب لونججيي!",
+    text:         "👋 أختار المادة وشوف الشيتات المتوفرة",
     reply_markup: subjectsKeyboard()
   });
 }
@@ -129,7 +129,7 @@ async function handleCallback(callback) {
     } else {
       await telegramRequest("editMessageText", {
         chat_id:      chatId, message_id: msgId,
-        text:         `📖 ${subject} — اختر الشيت:`,
+        text:         `📖 ${subject} — اختار الشيت:`,
         reply_markup: lecturesKeyboard(subject, lectures)
       });
     }
