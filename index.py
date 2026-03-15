@@ -2,15 +2,13 @@ import os
 import re
 import json
 import requests
-from flask import Flask, request
-
-app = Flask(__name__)
+from http.server import BaseHTTPRequestHandler
 
 # ──────────────────────────────────────────
 # إعداد المتغيرات
 # ──────────────────────────────────────────
-TOKEN   = os.environ.get("TOKEN")
-API     = f"https://api.telegram.org/bot{TOKEN}"
+TOKEN = os.environ.get("TOKEN")
+API   = f"https://api.telegram.org/bot{TOKEN}"
 
 BASE_DIR  = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FILES_DIR = os.path.join(BASE_DIR, "files")
@@ -36,14 +34,13 @@ def natural_sort_key(text: str):
 
 
 # ──────────────────────────────────────────
-# قراءة الملفات من المجلد
+# قراءة الملفات — غير حساس للحروف الكبيرة
 # ──────────────────────────────────────────
 def get_subjects() -> dict:
-    subjects = {}
+    subjects    = {}
+    subject_map = {s.lower(): s for s in ALL_SUBJECTS}
     if not os.path.exists(FILES_DIR):
         return subjects
-    # بناء خريطة من الاسم بالحروف الصغيرة إلى الاسم الرسمي
-    subject_map = {s.lower(): s for s in ALL_SUBJECTS}
     for filename in os.listdir(FILES_DIR):
         if not filename.lower().endswith(".pdf"):
             continue
@@ -53,8 +50,7 @@ def get_subjects() -> dict:
             continue
         raw_subject = name[:dash]
         lecture     = name[dash + 1:]
-        # تطابق غير حساس للحروف
-        subject = subject_map.get(raw_subject.lower(), raw_subject)
+        subject     = subject_map.get(raw_subject.lower(), raw_subject)
         subjects.setdefault(subject, {})[lecture] = os.path.join(FILES_DIR, filename)
     return subjects
 
@@ -62,12 +58,10 @@ def get_subjects() -> dict:
 # ──────────────────────────────────────────
 # دوال إرسال Telegram
 # ──────────────────────────────────────────
-def send_message(chat_id, text, reply_markup=None, parse_mode=None):
+def send_message(chat_id, text, reply_markup=None):
     data = {"chat_id": chat_id, "text": text}
     if reply_markup:
         data["reply_markup"] = json.dumps(reply_markup)
-    if parse_mode:
-        data["parse_mode"] = parse_mode
     requests.post(f"{API}/sendMessage", json=data)
 
 
@@ -92,7 +86,7 @@ def answer_callback(callback_id):
 
 
 # ──────────────────────────────────────────
-# بناء قوائم الأزرار
+# بناء الأزرار
 # ──────────────────────────────────────────
 def subjects_keyboard():
     return {
@@ -104,10 +98,9 @@ def subjects_keyboard():
 
 
 def lectures_keyboard(subject, lectures):
-    sorted_lecs = sorted(lectures.keys(), key=natural_sort_key)
     buttons = [
         [{"text": f"📄 {lec}", "callback_data": f"lec|{subject}|||{lec}"}]
-        for lec in sorted_lecs
+        for lec in sorted(lectures.keys(), key=natural_sort_key)
     ]
     buttons.append([{"text": "🔙 رجوع", "callback_data": "back"}])
     return {"inline_keyboard": buttons}
@@ -164,24 +157,33 @@ def handle_callback(callback):
 
 
 # ──────────────────────────────────────────
-# Webhook Route
+# Vercel Handler — الاسم لازم يكون "handler"
 # ──────────────────────────────────────────
-@app.route("/webhook", methods=["POST"])
-def webhook():
-    update = request.get_json(force=True)
+class handler(BaseHTTPRequestHandler):
 
-    if "message" in update:
-        msg  = update["message"]
-        text = msg.get("text", "")
-        if text.startswith("/start"):
-            handle_start(msg["chat"]["id"])
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain; charset=utf-8")
+        self.end_headers()
+        self.wfile.write("البوت شغال ✅".encode("utf-8"))
 
-    elif "callback_query" in update:
-        handle_callback(update["callback_query"])
+    def do_POST(self):
+        length = int(self.headers.get("Content-Length", 0))
+        body   = self.rfile.read(length)
+        try:
+            update = json.loads(body)
+            if "message" in update:
+                msg  = update["message"]
+                text = msg.get("text", "")
+                if text.startswith("/start"):
+                    handle_start(msg["chat"]["id"])
+            elif "callback_query" in update:
+                handle_callback(update["callback_query"])
+        except Exception:
+            pass
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"OK")
 
-    return "OK", 200
-
-
-@app.route("/", methods=["GET"])
-def index():
-    return "البوت شغال ✅", 200
+    def log_message(self, *args):
+        pass
