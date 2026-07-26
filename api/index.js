@@ -9,8 +9,8 @@ const GITHUB_REPO   = "Telegram-USTsheets3-ForFirstYear-Bot";
 const GITHUB_BRANCH = "main";
 const RAW_BASE      = `https://github.com/${GITHUB_USER}/${GITHUB_REPO}/raw/${GITHUB_BRANCH}/files`;
 
-const REDIS_URL   = process.env.KV_REST_API_URL;
-const REDIS_TOKEN = process.env.KV_REST_API_TOKEN;
+const REDIS_URL   = process.env.NEWREDIS_KV_REST_API_URL   || process.env.KV_REST_API_URL   || process.env.UPSTASH_REDIS_REST_URL;
+const REDIS_TOKEN = process.env.NEWREDIS_KV_REST_API_TOKEN || process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
 
 // ── Redis (بيبعت الأمر كـ JSON في جسم الطلب، عشان أي نص فيه مسافات أو رموز خاصة يتبعت صح) ──
 async function redisRequest(...args) {
