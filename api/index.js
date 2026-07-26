@@ -245,7 +245,6 @@ async function handleMessage(msg) {
     if (lectures[cleanText]) {
       const fileVal = lectures[cleanText];
       await trackDownload(subject);
-      await markReviewed(chatId, subject, cleanText);
 
       if (fileVal.startsWith("fileid:")) {
         const fileId = LARGE_FILES[fileVal.slice(7)];
@@ -257,7 +256,7 @@ async function handleMessage(msg) {
       await telegramRequest("sendMessage", {
         chat_id:      chatId,
         text:         `📖 ${subject} — اختر الشيت:`,
-        reply_markup: await lecturesReplyKeyboard(chatId, subject, lectures)
+        reply_markup: await lecturesReplyKeyboard(subject, lectures)
       });
       return;
     }
@@ -266,7 +265,7 @@ async function handleMessage(msg) {
     await telegramRequest("sendMessage", {
       chat_id:      chatId,
       text:         `📖 ${subject} — اختر الشيت:`,
-      reply_markup: await lecturesReplyKeyboard(chatId, subject, lectures)
+      reply_markup: await lecturesReplyKeyboard(subject, lectures)
     });
     return;
   }
@@ -286,7 +285,7 @@ async function handleMessage(msg) {
     await telegramRequest("sendMessage", {
       chat_id:      chatId,
       text:         `📖 ${text} — اختر الشيت:`,
-      reply_markup: await lecturesReplyKeyboard(chatId, text, lectures)
+      reply_markup: await lecturesReplyKeyboard(text, lectures)
     });
     return;
   }
