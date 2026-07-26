@@ -162,12 +162,16 @@ function mainReplyKeyboard(isAdmin) {
   return { keyboard: rows, resize_keyboard: true };
 }
 
+function lectureLabel(lec) {
+  return /^\d+$/.test(lec) ? `Lec ${lec}` : lec;
+}
+
 async function lecturesReplyKeyboard(userId, subject, lectures) {
   const sorted = Object.keys(lectures).sort(naturalSort);
   const rows   = [];
   for (const lec of sorted) {
     const done = await isReviewed(userId, subject, lec);
-    rows.push([{ text: `${done ? "✅ " : ""}${lec}` }]);
+    rows.push([{ text: `${done ? "✅ " : ""}${lectureLabel(lec)}` }]);
   }
   rows.push([{ text: "Back" }, { text: "Main Menu" }]);
   return { keyboard: rows, resize_keyboard: true };
@@ -248,7 +252,7 @@ async function handleMessage(msg) {
   if (state.startsWith("subject:")) {
     const subject   = state.slice(8);
     const lectures  = subjects[subject] || {};
-    const cleanText = text.replace(/^✅\s*/, "");
+    const cleanText = text.replace(/^✅\s*/, "").replace(/^Lec\s+/i, "");
 
     if (lectures[cleanText]) {
       const fileVal = lectures[cleanText];
