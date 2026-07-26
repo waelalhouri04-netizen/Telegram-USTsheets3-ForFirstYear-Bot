@@ -12,25 +12,6 @@ const RAW_BASE      = `https://github.com/${GITHUB_USER}/${GITHUB_REPO}/raw/${GI
 const REDIS_URL   = process.env.KV_REST_API_URL;
 const REDIS_TOKEN = process.env.KV_REST_API_TOKEN;
 
-// ── جدول المحاضرات ──
-const SCHEDULE = {
-  "السبت":    [{ time: "8:00 – 10:00 PM", subject: "Physics - 1" }],
-  "الأحد":    [],
-  "الاثنين":  [{ time: "10:00 AM – 12:00 PM", subject: "General Chemistry" }],
-  "الثلاثاء": [],
-  "الأربعاء": [
-    { time: "8:00 – 10:00 AM", subject: "Introduction to Computer" },
-    { time: "10:00 AM – 12:00 PM", subject: "Calculus and its Application - 1" },
-    { time: "1:00 – 3:00 PM", subject: "Linear Algebra and Matrices" }
-  ],
-  "الخميس": [
-    { time: "11:00 AM – 1:00 PM", subject: "General English Language" },
-    { time: "1:00 – 3:00 PM", subject: "Introduction to Materials Science" }
-  ]
-};
-
-const DAY_NAMES = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
-
 // ── Redis ──
 async function redisRequest(method, ...args) {
   if (!REDIS_URL || !REDIS_TOKEN) return null;
@@ -66,35 +47,23 @@ async function getAllUsers() {
   return await redisRequest("smembers", "users") || [];
 }
 
-// ── تتبع التقدم ──
+// ── حالة "تمت المراجعة" (تتحدد تلقائياً أول ما الطالب يفتح الملف) ──
 async function isReviewed(userId, subject, lecture) {
   const val = await redisRequest("get", `progress:${userId}:${subject}:${lecture}`);
   return val === "1";
 }
 
-async function toggleReviewed(userId, subject, lecture) {
-  const key = `progress:${userId}:${subject}:${lecture}`;
-  const val = await redisRequest("get", key);
-  if (val === "1") {
-    await redisRequest("del", key);
-    return false;
-  } else {
-    await redisRequest("set", key, "1");
-    return true;
-  }
+async function markReviewed(userId, subject, lecture) {
+  await redisRequest("set", `progress:${userId}:${subject}:${lecture}`, "1");
 }
 
-async function getUserProgress(userId, subjects) {
-  const progress = {};
-  for (const [subject, lectures] of Object.entries(subjects)) {
-    const total    = Object.keys(lectures).length;
-    let reviewed   = 0;
-    for (const lecture of Object.keys(lectures)) {
-      if (await isReviewed(userId, subject, lecture)) reviewed++;
-    }
-    progress[subject] = { reviewed, total };
-  }
-  return progress;
+// ── حالة المستخدم الحالية (main أو subject:الاسم) ──
+async function getState(userId) {
+  return (await redisRequest("get", `state:${userId}`)) || "main";
+}
+
+async function setState(userId, state) {
+  await redisRequest("set", `state:${userId}`, state);
 }
 
 // ── ملفات كبيرة ──
@@ -167,295 +136,56 @@ function telegramRequest(method, body) {
   });
 }
 
-// ── لوحة التحكم ──
-function mainMenuKeyboard(isAdmin) {
-  const rows = [
-    [
-      { text: "📚 الشيتات", callback_data: "menu|sheets"   },
-      { text: "📅 الجدول",  callback_data: "menu|schedule" }
-    ],
-    [
-      { text: "📈 تقدمي",    callback_data: "menu|progress" },
-      { text: "🎲 عشوائي",  callback_data: "menu|random"   }
-    ]
-  ];
-  if (isAdmin) {
-    rows.push([
-      { text: "📊 الإحصائيات", callback_data: "menu|stats"     },
-      { text: "📢 Broadcast",  callback_data: "menu|broadcast" }
-    ]);
-  }
-  return { inline_keyboard: rows };
-}
-
-function subjectsKeyboard() {
+// ── Reply Keyboards (لوحة مفاتيح دائمة تحت الشات) ──
+function mainReplyKeyboard(isAdmin) {
   const rows = [];
   for (let i = 0; i < ALL_SUBJECTS.length; i += 2) {
-    const row = [{ text: `📘 ${ALL_SUBJECTS[i]}`, callback_data: `sub|${ALL_SUBJECTS[i]}` }];
-    if (ALL_SUBJECTS[i + 1]) {
-      row.push({ text: `📘 ${ALL_SUBJECTS[i + 1]}`, callback_data: `sub|${ALL_SUBJECTS[i + 1]}` });
-    }
+    const row = [{ text: ALL_SUBJECTS[i] }];
+    if (ALL_SUBJECTS[i + 1]) row.push({ text: ALL_SUBJECTS[i + 1] });
     rows.push(row);
   }
-  rows.push([{ text: "🏠 القائمة الرئيسية", callback_data: "menu|home" }]);
-  return { inline_keyboard: rows };
+  if (isAdmin) {
+    rows.push([{ text: "📊 الإحصائيات" }, { text: "📢 Broadcast" }]);
+  }
+  return { keyboard: rows, resize_keyboard: true };
 }
 
-async function lecturesKeyboard(userId, subject, lectures) {
-  const sorted  = Object.keys(lectures).sort(naturalSort);
-  const buttons = [];
+async function lecturesReplyKeyboard(userId, subject, lectures) {
+  const sorted = Object.keys(lectures).sort(naturalSort);
+  const rows   = [];
   for (const lec of sorted) {
     const done = await isReviewed(userId, subject, lec);
-    buttons.push([
-      { text: `📄 ${lec}`,         callback_data: `lec|${subject}|||${lec}`      },
-      { text: done ? "✅" : "☐",   callback_data: `toggle|${subject}|||${lec}`   }
-    ]);
+    rows.push([{ text: `${done ? "✅ " : ""}${lec}` }]);
   }
-  buttons.push([{ text: "🔙 رجوع", callback_data: "back|sheets" }]);
-  return { inline_keyboard: buttons };
+  rows.push([{ text: "Back" }, { text: "Main Menu" }]);
+  return { keyboard: rows, resize_keyboard: true };
 }
 
-function backToHomeKeyboard() {
-  return { inline_keyboard: [[{ text: "🏠 القائمة الرئيسية", callback_data: "menu|home" }]] };
-}
-
-function buildScheduleText() {
-  const today     = new Date();
-  const dayName   = DAY_NAMES[today.getDay()];
-  const todayLecs = SCHEDULE[dayName] || [];
-
-  function icon(time) {
-    if (time.includes("PM") && !time.startsWith("12")) return "🌙";
-    if (time.startsWith("1") && time.includes("PM"))   return "🌤";
-    return "☀️";
-  }
-
-  let text = "📅 جدول المحاضرات\n\n";
-
-  if (todayLecs.length > 0) {
-    text += `⚡️ اليوم (${dayName}):\n`;
-    for (const lec of todayLecs) {
-      text += `${icon(lec.time)} ${lec.subject}  ${lec.time}\n`;
-    }
-    text += "\n";
-  } else {
-    text += `✅ لا توجد محاضرات اليوم (${dayName})\n\n`;
-  }
-
-  for (const [day, lectures] of Object.entries(SCHEDULE)) {
-    if (lectures.length === 0) continue;
-    const isToday = day === dayName;
-    text += `━━━ ${day}${isToday ? " (اليوم)" : ""} ━━━\n`;
-    for (const lec of lectures) {
-      text += `${icon(lec.time)} ${lec.subject}  ${lec.time}\n`;
-    }
-    text += "\n";
-  }
-
-  return text;
-}
-
-async function buildProgressText(userId, subjects) {
-  const progress  = await getUserProgress(userId, subjects);
-  let text        = "📈 تقدمك الدراسي\n\n";
-  let totalAll    = 0;
-  let reviewedAll = 0;
-
-  for (const [subject, { reviewed, total }] of Object.entries(progress)) {
-    if (total === 0) continue;
-    totalAll    += total;
-    reviewedAll += reviewed;
-    const pct    = Math.round((reviewed / total) * 100);
-    const filled = Math.round(pct / 10);
-    const bar    = "🟩".repeat(filled) + "⬜".repeat(10 - filled);
-    const badge  = pct === 100 ? " ✅" : "";
-    text += `${subject}\n${bar}  ${reviewed}/${total}  ${pct}%${badge}\n\n`;
-  }
-
-  const totalPct = totalAll > 0 ? Math.round((reviewedAll / totalAll) * 100) : 0;
-  const totalFilled = Math.round(totalPct / 10);
-  const totalBar    = "🟩".repeat(totalFilled) + "⬜".repeat(10 - totalFilled);
-  text += `━━━━━━━━━━━━━━━\n🎯 الإجمالي\n${totalBar}  ${reviewedAll}/${totalAll}  ${totalPct}%`;
-  return text;
-}
-
-// ── معالجة الأحداث ──
-async function handleStart(chatId, firstName, isAdmin) {
-  await trackUser(chatId);
+// ── إرسال القائمة الرئيسية ──
+async function sendMainMenu(chatId, firstName, isAdmin) {
   const adminBadge = isAdmin ? " 👑" : "";
   await telegramRequest("sendMessage", {
     chat_id:      chatId,
-    text:         `👋 أهلاً ${firstName || ""}${adminBadge}!\n\nاختر من القائمة:`,
-    reply_markup: mainMenuKeyboard(isAdmin)
+    text:         `👋 أهلاً ${firstName || ""}${adminBadge}!\n\nاختر المادة:`,
+    reply_markup: mainReplyKeyboard(isAdmin)
   });
 }
 
-async function handleCallback(callback) {
-  const queryId   = callback.id;
-  const chatId    = callback.message.chat.id;
-  const msgId     = callback.message.message_id;
-  const data      = callback.data;
-  const isAdmin   = chatId === ADMIN_ID;
-  const firstName = callback.from?.first_name || "";
-  const subjects  = getSubjects();
-
-  await telegramRequest("answerCallbackQuery", { callback_query_id: queryId });
-
-  // ── القائمة الرئيسية ──
-  if (data.startsWith("menu|")) {
-    const action = data.slice(5);
-
-    if (action === "home") {
-      const adminBadge = isAdmin ? " 👑" : "";
-      await telegramRequest("editMessageText", {
-        chat_id:      chatId, message_id: msgId,
-        text:         `👋 أهلاً ${firstName}${adminBadge}!\n\nاختر من القائمة:`,
-        reply_markup: mainMenuKeyboard(isAdmin)
-      });
-
-    } else if (action === "sheets") {
-      await telegramRequest("editMessageText", {
-        chat_id:      chatId, message_id: msgId,
-        text:         "📚 اختر المادة:",
-        reply_markup: subjectsKeyboard()
-      });
-
-    } else if (action === "schedule") {
-      await telegramRequest("editMessageText", {
-        chat_id:      chatId, message_id: msgId,
-        text:         buildScheduleText(),
-        reply_markup: backToHomeKeyboard()
-      });
-
-    } else if (action === "progress") {
-      const text = await buildProgressText(chatId, subjects);
-      await telegramRequest("editMessageText", {
-        chat_id:      chatId, message_id: msgId,
-        text,
-        reply_markup: backToHomeKeyboard()
-      });
-
-    } else if (action === "random") {
-      // شيت عشوائي
-      const allFiles = [];
-      for (const [subject, lectures] of Object.entries(subjects)) {
-        for (const lecture of Object.keys(lectures)) {
-          allFiles.push({ subject, lecture, fileVal: lectures[lecture] });
-        }
-      }
-      if (allFiles.length === 0) {
-        await telegramRequest("answerCallbackQuery", { callback_query_id: queryId, text: "لا توجد شيتات!" });
-        return;
-      }
-      const pick = allFiles[Math.floor(Math.random() * allFiles.length)];
-      await trackDownload(pick.subject);
-      await telegramRequest("editMessageText", {
-        chat_id: chatId, message_id: msgId,
-        text:    `🎲 شيت عشوائي!\n\n📚 ${pick.subject}\n📄 ${pick.lecture}`,
-        reply_markup: backToHomeKeyboard()
-      });
-      if (pick.fileVal.startsWith("fileid:")) {
-        const fileId = LARGE_FILES[pick.fileVal.slice(7)];
-        await telegramRequest("sendDocument", { chat_id: chatId, document: fileId, caption: `📚 ${pick.subject}\n📄 ${pick.lecture}` });
-      } else {
-        await telegramRequest("sendDocument", { chat_id: chatId, document: `${RAW_BASE}/${encodeURIComponent(pick.fileVal)}`, caption: `📚 ${pick.subject}\n📄 ${pick.lecture}` });
-      }
-
-    } else if (action === "stats" && isAdmin) {
-      const { total, users, subjectStats } = await getStats();
-      const sorted = Object.entries(subjectStats).sort((a, b) => b[1] - a[1]);
-      const lines  = sorted.length > 0 ? sorted.map(([s, c]) => `📖 ${s}: ${c} تحميل`).join("\n") : "لا توجد بيانات بعد";
-      await telegramRequest("editMessageText", {
-        chat_id:      chatId, message_id: msgId,
-        text:         `📊 الإحصائيات:\n\n👥 المستخدمون: ${users}\n📥 إجمالي التحميلات: ${total}\n\n📚 تفاصيل المواد:\n${lines}`,
-        reply_markup: backToHomeKeyboard()
-      });
-
-    } else if (action === "broadcast" && isAdmin) {
-      await telegramRequest("editMessageText", {
-        chat_id:      chatId, message_id: msgId,
-        text:         "📢 أرسل نص الرسالة الآن:",
-        reply_markup: backToHomeKeyboard()
-      });
-      await redisRequest("set", `broadcast_mode:${chatId}`, "1", "EX", "300");
-    }
-
-  // ── قائمة الشيتات ──
-  } else if (data.startsWith("sub|")) {
-    const subject  = data.slice(4);
-    const lectures = subjects[subject] || {};
-    if (Object.keys(lectures).length === 0) {
-      await telegramRequest("editMessageText", {
-        chat_id:      chatId, message_id: msgId,
-        text:         `📖 ${subject}\n⚠️ لا توجد شيتات متوفرة بعد.`,
-        reply_markup: backToHomeKeyboard()
-      });
-    } else {
-      await telegramRequest("editMessageText", {
-        chat_id:      chatId, message_id: msgId,
-        text:         `📖 ${subject} — اختر الشيت:`,
-        reply_markup: await lecturesKeyboard(chatId, subject, lectures)
-      });
-    }
-
-  } else if (data.startsWith("back|")) {
-    const target = data.slice(5);
-    if (target === "sheets") {
-      await telegramRequest("editMessageText", {
-        chat_id:      chatId, message_id: msgId,
-        text:         "📚 اختر المادة:",
-        reply_markup: subjectsKeyboard()
-      });
-    }
-
-  // ── تبديل حالة المراجعة ──
-  } else if (data.startsWith("toggle|")) {
-    const rest               = data.slice(7);
-    const [subject, lecture] = rest.split("|||");
-    const nowDone            = await toggleReviewed(chatId, subject, lecture);
-    const lectures           = subjects[subject] || {};
-
-    await telegramRequest("answerCallbackQuery", {
-      callback_query_id: queryId,
-      text: nowDone ? "✅ تم تحديده كمراجَع!" : "☐ تم إلغاء التحديد"
-    });
-
-    await telegramRequest("editMessageReplyMarkup", {
-      chat_id:      chatId, message_id: msgId,
-      reply_markup: await lecturesKeyboard(chatId, subject, lectures)
-    });
-
-  // ── تحميل ملف ──
-  } else if (data.startsWith("lec|")) {
-    const rest               = data.slice(4);
-    const [subject, lecture] = rest.split("|||");
-    const fileVal            = subjects[subject]?.[lecture];
-
-    if (fileVal) {
-      await trackDownload(subject);
-      if (fileVal.startsWith("fileid:")) {
-        const fileId = LARGE_FILES[fileVal.slice(7)];
-        await telegramRequest("sendDocument", { chat_id: chatId, document: fileId, caption: `📚 ${subject}\n📄 ${lecture}` });
-      } else {
-        await telegramRequest("sendDocument", { chat_id: chatId, document: `${RAW_BASE}/${encodeURIComponent(fileVal)}`, caption: `📚 ${subject}\n📄 ${lecture}` });
-      }
-    } else {
-      await telegramRequest("sendMessage", { chat_id: chatId, text: "❌ الملف غير موجود." });
-    }
-  }
-}
-
+// ── معالجة الرسائل ──
 async function handleMessage(msg) {
   const chatId    = msg.chat.id;
-  const text      = msg.text || "";
+  const text      = (msg.text || "").trim();
   const firstName = msg.from?.first_name || "";
   const isAdmin   = chatId === ADMIN_ID;
 
   if (text.startsWith("/start")) {
-    await handleStart(chatId, firstName, isAdmin);
+    await trackUser(chatId);
+    await setState(chatId, "main");
+    await sendMainMenu(chatId, firstName, isAdmin);
     return;
   }
 
+  // ── وضع الـ Broadcast (للأدمن فقط) ──
   if (isAdmin) {
     const mode = await redisRequest("get", `broadcast_mode:${chatId}`);
     if (mode === "1" && !text.startsWith("/")) {
@@ -465,10 +195,100 @@ async function handleMessage(msg) {
       for (const userId of users) {
         const result = await telegramRequest("sendMessage", { chat_id: userId, text: `📢 إشعار:\n\n${text}` });
         if (result?.ok) success++; else failed++;
+        await new Promise(r => setTimeout(r, 40));
       }
       await telegramRequest("sendMessage", { chat_id: chatId, text: `✅ تم الإرسال!\n\n📤 نجح: ${success}\n❌ فشل: ${failed}` });
+      await setState(chatId, "main");
+      await sendMainMenu(chatId, firstName, isAdmin);
+      return;
     }
   }
+
+  // ── أزرار عامة تشتغل من أي مكان ──
+  if (text === "Main Menu" || text === "Back") {
+    await setState(chatId, "main");
+    await sendMainMenu(chatId, firstName, isAdmin);
+    return;
+  }
+
+  if (isAdmin && text === "📊 الإحصائيات") {
+    const { total, users, subjectStats } = await getStats();
+    const sorted = Object.entries(subjectStats).sort((a, b) => b[1] - a[1]);
+    const lines  = sorted.length > 0 ? sorted.map(([s, c]) => `📖 ${s}: ${c} تحميل`).join("\n") : "لا توجد بيانات بعد";
+    await telegramRequest("sendMessage", {
+      chat_id:      chatId,
+      text:         `📊 الإحصائيات:\n\n👥 المستخدمون: ${users}\n📥 إجمالي التحميلات: ${total}\n\n📚 تفاصيل المواد:\n${lines}`,
+      reply_markup: mainReplyKeyboard(isAdmin)
+    });
+    return;
+  }
+
+  if (isAdmin && text === "📢 Broadcast") {
+    await redisRequest("set", `broadcast_mode:${chatId}`, "1", "EX", "300");
+    await telegramRequest("sendMessage", { chat_id: chatId, text: "📢 أرسل نص الرسالة الآن:" });
+    return;
+  }
+
+  const subjects = getSubjects();
+  const state    = await getState(chatId);
+
+  // ── داخل قائمة مادة معيّنة ──
+  if (state.startsWith("subject:")) {
+    const subject   = state.slice(8);
+    const lectures  = subjects[subject] || {};
+    const cleanText = text.replace(/^✅\s*/, "");
+
+    if (lectures[cleanText]) {
+      const fileVal = lectures[cleanText];
+      await trackDownload(subject);
+      await markReviewed(chatId, subject, cleanText);
+
+      if (fileVal.startsWith("fileid:")) {
+        const fileId = LARGE_FILES[fileVal.slice(7)];
+        await telegramRequest("sendDocument", { chat_id: chatId, document: fileId, caption: `📚 ${subject}\n📄 ${cleanText}` });
+      } else {
+        await telegramRequest("sendDocument", { chat_id: chatId, document: `${RAW_BASE}/${encodeURIComponent(fileVal)}`, caption: `📚 ${subject}\n📄 ${cleanText}` });
+      }
+
+      await telegramRequest("sendMessage", {
+        chat_id:      chatId,
+        text:         `📖 ${subject} — اختر الشيت:`,
+        reply_markup: await lecturesReplyKeyboard(chatId, subject, lectures)
+      });
+      return;
+    }
+
+    // نص غير معروف وهو جوه مادة معيّنة → اعرض له نفس القائمة تاني
+    await telegramRequest("sendMessage", {
+      chat_id:      chatId,
+      text:         `📖 ${subject} — اختر الشيت:`,
+      reply_markup: await lecturesReplyKeyboard(chatId, subject, lectures)
+    });
+    return;
+  }
+
+  // ── في القائمة الرئيسية: هل النص ده اسم مادة؟ ──
+  if (ALL_SUBJECTS.includes(text)) {
+    const lectures = subjects[text] || {};
+    if (Object.keys(lectures).length === 0) {
+      await telegramRequest("sendMessage", {
+        chat_id:      chatId,
+        text:         `📖 ${text}\n⚠️ لا توجد شيتات متوفرة بعد.`,
+        reply_markup: mainReplyKeyboard(isAdmin)
+      });
+      return;
+    }
+    await setState(chatId, `subject:${text}`);
+    await telegramRequest("sendMessage", {
+      chat_id:      chatId,
+      text:         `📖 ${text} — اختر الشيت:`,
+      reply_markup: await lecturesReplyKeyboard(chatId, text, lectures)
+    });
+    return;
+  }
+
+  // ── أي نص تاني مش متعرف عليه ──
+  await sendMainMenu(chatId, firstName, isAdmin);
 }
 
 export default async function handler(req, res) {
@@ -476,8 +296,7 @@ export default async function handler(req, res) {
 
   if (req.method === "POST") {
     const update = req.body;
-    if (update?.message)        await handleMessage(update.message);
-    else if (update?.callback_query) await handleCallback(update.callback_query);
+    if (update?.message) await handleMessage(update.message);
     return res.status(200).send("OK");
   }
 
