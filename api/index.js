@@ -12,13 +12,14 @@ const RAW_BASE      = `https://github.com/${GITHUB_USER}/${GITHUB_REPO}/raw/${GI
 const REDIS_URL   = process.env.KV_REST_API_URL;
 const REDIS_TOKEN = process.env.KV_REST_API_TOKEN;
 
-// ── Redis ──
+// ── Redis (كل جزء من الـ URL بيتشفّر عشان أسماء المواد بقت فيها مسافات) ──
 async function redisRequest(method, ...args) {
   if (!REDIS_URL || !REDIS_TOKEN) return null;
   try {
-    const url  = `${REDIS_URL}/${[method, ...args].join("/")}`;
-    const res  = await fetch(url, { headers: { Authorization: `Bearer ${REDIS_TOKEN}` } });
-    const data = await res.json();
+    const parts = [method, ...args].map(a => encodeURIComponent(a));
+    const url   = `${REDIS_URL}/${parts.join("/")}`;
+    const res   = await fetch(url, { headers: { Authorization: `Bearer ${REDIS_TOKEN}` } });
+    const data  = await res.json();
     return data.result ?? null;
   } catch { return null; }
 }
@@ -36,9 +37,9 @@ async function getStats() {
   const total = parseInt(await redisRequest("get", "downloads:total") || 0);
   const users = parseInt(await redisRequest("scard", "users") || 0);
   const subjectStats = {};
-  for (const subject of ALL_SUBJECTS) {
-    const count = parseInt(await redisRequest("get", `subject:${subject}`) || 0);
-    if (count > 0) subjectStats[subject] = count;
+  for (const { label } of SUBJECTS) {
+    const count = parseInt(await redisRequest("get", `subject:${label}`) || 0);
+    if (count > 0) subjectStats[label] = count;
   }
   return { total, users, subjectStats };
 }
@@ -66,16 +67,25 @@ async function setState(userId, state) {
   await redisRequest("set", `state:${userId}`, state);
 }
 
-// ── ملفات كبيرة ──
+// ── ملفات كبيرة (لازم يتضاف بأكواد المواد الجديدة لو احتجت) ──
 const LARGE_FILES = {
-  "English-lec-1": "BQACAgQAAxkBAAMzabZGREobdOVkk3SIOcldjtYknJoAAjQcAAJsUrFRlVNb_Irr6Og6BA"
+  // مثال: "Physics2-1": "FILE_ID_HERE"
 };
 
-const ALL_SUBJECTS = [
-  "Physics", "Chemistry", "Computer",
-  "Calculus", "Linear", "English",
-  "Materials", "History"
+// ── مواد الترم الجديد ──
+// code: يستخدم في تسمية الملفات جوه مجلد files/  مثال: DataStructures-1.pdf
+// label: الاسم اللي يظهر للطالب كزرار
+const SUBJECTS = [
+  { code: "DataStructures",     label: "Data Structures and Algorithms" },
+  { code: "Physics2",           label: "Physics – 2" },
+  { code: "TechEnglish",        label: "Technical English" },
+  { code: "EngDrawing",         label: "Fundamentals of Engineering Drawing" },
+  { code: "ProgPrinciples",     label: "Principles of Computer Programming" },
+  { code: "AnalyticalGeometry", label: "Analytical Geometry" },
+  { code: "Calculus2",          label: "Calculus and its Application - 2" }
 ];
+
+const SUBJECT_LABELS = SUBJECTS.map(s => s.label);
 
 const ALLOWED_EXT = [".pdf", ".pptx", ".docx", ".xlsx", ".png", ".jpg"];
 
@@ -84,9 +94,9 @@ function naturalSort(a, b) {
 }
 
 function getSubjects() {
-  const subjects   = {};
-  const subjectMap = {};
-  ALL_SUBJECTS.forEach(s => subjectMap[s.toLowerCase()] = s);
+  const subjects  = {};
+  const codeMap   = {};
+  SUBJECTS.forEach(s => codeMap[s.code.toLowerCase()] = s.label);
 
   const filesDir = path.join(process.cwd(), "files");
   if (!fs.existsSync(filesDir)) return subjects;
@@ -97,20 +107,20 @@ function getSubjects() {
     const name = filename.slice(0, filename.lastIndexOf("."));
     const dash = name.indexOf("-");
     if (dash === -1) return;
-    const rawSubject = name.slice(0, dash);
-    const lecture    = name.slice(dash + 1);
-    const subject    = subjectMap[rawSubject.toLowerCase()] || rawSubject;
-    if (!subjects[subject]) subjects[subject] = {};
-    subjects[subject][lecture] = filename;
+    const rawCode = name.slice(0, dash);
+    const lecture = name.slice(dash + 1);
+    const label   = codeMap[rawCode.toLowerCase()] || rawCode;
+    if (!subjects[label]) subjects[label] = {};
+    subjects[label][lecture] = filename;
   });
 
   Object.keys(LARGE_FILES).forEach(key => {
     const dash    = key.indexOf("-");
-    const rawSub  = key.slice(0, dash);
+    const rawCode = key.slice(0, dash);
     const lecture = key.slice(dash + 1);
-    const subject = subjectMap[rawSub.toLowerCase()] || rawSub;
-    if (!subjects[subject]) subjects[subject] = {};
-    subjects[subject][lecture] = `fileid:${key}`;
+    const label   = codeMap[rawCode.toLowerCase()] || rawCode;
+    if (!subjects[label]) subjects[label] = {};
+    subjects[label][lecture] = `fileid:${key}`;
   });
 
   return subjects;
@@ -139,9 +149,9 @@ function telegramRequest(method, body) {
 // ── Reply Keyboards (لوحة مفاتيح دائمة تحت الشات) ──
 function mainReplyKeyboard(isAdmin) {
   const rows = [];
-  for (let i = 0; i < ALL_SUBJECTS.length; i += 2) {
-    const row = [{ text: ALL_SUBJECTS[i] }];
-    if (ALL_SUBJECTS[i + 1]) row.push({ text: ALL_SUBJECTS[i + 1] });
+  for (let i = 0; i < SUBJECT_LABELS.length; i += 2) {
+    const row = [{ text: SUBJECT_LABELS[i] }];
+    if (SUBJECT_LABELS[i + 1]) row.push({ text: SUBJECT_LABELS[i + 1] });
     rows.push(row);
   }
   if (isAdmin) {
@@ -268,7 +278,7 @@ async function handleMessage(msg) {
   }
 
   // ── في القائمة الرئيسية: هل النص ده اسم مادة؟ ──
-  if (ALL_SUBJECTS.includes(text)) {
+  if (SUBJECT_LABELS.includes(text)) {
     const lectures = subjects[text] || {};
     if (Object.keys(lectures).length === 0) {
       await telegramRequest("sendMessage", {
