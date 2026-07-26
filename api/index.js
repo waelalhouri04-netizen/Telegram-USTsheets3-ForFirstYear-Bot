@@ -298,6 +298,12 @@ async function handleMessage(msg) {
   }
 
   // ── أي نص تاني مش متعرف عليه ──
+  if (isAdmin) {
+    await telegramRequest("sendMessage", {
+      chat_id: chatId,
+      text: `🐞 Debug:\nstate = "${state}"\ntext = "${text}"\nsubjects keys = ${Object.keys(subjects).join(", ") || "(فاضي)"}`
+    });
+  }
   await sendMainMenu(chatId, firstName, isAdmin);
 }
 
