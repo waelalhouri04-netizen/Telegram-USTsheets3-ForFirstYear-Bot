@@ -289,6 +289,10 @@ async function handleMessage(msg) {
       return;
     }
     await setState(chatId, `subject:${text}`);
+    if (isAdmin) {
+      const verify = await getState(chatId);
+      await telegramRequest("sendMessage", { chat_id: chatId, text: `🐞 Debug: just wrote state, read-back = "${verify}"` });
+    }
     await telegramRequest("sendMessage", {
       chat_id:      chatId,
       text:         `📖 ${text} — اختر الشيت:`,
