@@ -50,16 +50,6 @@ async function getAllUsers() {
   return await redisRequest("smembers", "users") || [];
 }
 
-// ── حالة "تمت المراجعة" (تتحدد تلقائياً أول ما الطالب يفتح الملف) ──
-async function isReviewed(userId, subject, lecture) {
-  const val = await redisRequest("get", `progress:${userId}:${subject}:${lecture}`);
-  return val === "1";
-}
-
-async function markReviewed(userId, subject, lecture) {
-  await redisRequest("set", `progress:${userId}:${subject}:${lecture}`, "1");
-}
-
 // ── حالة المستخدم الحالية (main أو subject:الاسم) ──
 async function getState(userId) {
   return (await redisRequest("get", `state:${userId}`)) || "main";
@@ -166,12 +156,11 @@ function lectureLabel(lec) {
   return /^\d+$/.test(lec) ? `Lec ${lec}` : lec;
 }
 
-async function lecturesReplyKeyboard(userId, subject, lectures) {
+async function lecturesReplyKeyboard(subject, lectures) {
   const sorted = Object.keys(lectures).sort(naturalSort);
   const rows   = [];
   for (const lec of sorted) {
-    const done = await isReviewed(userId, subject, lec);
-    rows.push([{ text: `${done ? "✅ " : ""}${lectureLabel(lec)}` }]);
+    rows.push([{ text: lectureLabel(lec) }]);
   }
   rows.push([{ text: "Back" }, { text: "Main Menu" }]);
   return { keyboard: rows, resize_keyboard: true };
@@ -179,10 +168,9 @@ async function lecturesReplyKeyboard(userId, subject, lectures) {
 
 // ── إرسال القائمة الرئيسية ──
 async function sendMainMenu(chatId, firstName, isAdmin) {
-  const adminBadge = isAdmin ? " 👑" : "";
   await telegramRequest("sendMessage", {
     chat_id:      chatId,
-    text:         `👋 أهلاً ${firstName || ""}${adminBadge}!\n\nاختر المادة:`,
+    text:         "اختر المادة:",
     reply_markup: mainReplyKeyboard(isAdmin)
   });
 }
