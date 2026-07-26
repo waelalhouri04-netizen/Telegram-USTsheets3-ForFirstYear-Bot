@@ -12,14 +12,16 @@ const RAW_BASE      = `https://github.com/${GITHUB_USER}/${GITHUB_REPO}/raw/${GI
 const REDIS_URL   = process.env.KV_REST_API_URL;
 const REDIS_TOKEN = process.env.KV_REST_API_TOKEN;
 
-// ── Redis (كل جزء من الـ URL بيتشفّر عشان أسماء المواد بقت فيها مسافات) ──
-async function redisRequest(method, ...args) {
+// ── Redis (بيبعت الأمر كـ JSON في جسم الطلب، عشان أي نص فيه مسافات أو رموز خاصة يتبعت صح) ──
+async function redisRequest(...args) {
   if (!REDIS_URL || !REDIS_TOKEN) return null;
   try {
-    const parts = [method, ...args].map(a => encodeURIComponent(a));
-    const url   = `${REDIS_URL}/${parts.join("/")}`;
-    const res   = await fetch(url, { headers: { Authorization: `Bearer ${REDIS_TOKEN}` } });
-    const data  = await res.json();
+    const res = await fetch(REDIS_URL, {
+      method:  "POST",
+      headers: { Authorization: `Bearer ${REDIS_TOKEN}`, "Content-Type": "application/json" },
+      body:    JSON.stringify(args)
+    });
+    const data = await res.json();
     return data.result ?? null;
   } catch { return null; }
 }
@@ -289,10 +291,6 @@ async function handleMessage(msg) {
       return;
     }
     await setState(chatId, `subject:${text}`);
-    if (isAdmin) {
-      const verify = await getState(chatId);
-      await telegramRequest("sendMessage", { chat_id: chatId, text: `🐞 Debug: just wrote state, read-back = "${verify}"` });
-    }
     await telegramRequest("sendMessage", {
       chat_id:      chatId,
       text:         `📖 ${text} — اختر الشيت:`,
@@ -302,12 +300,6 @@ async function handleMessage(msg) {
   }
 
   // ── أي نص تاني مش متعرف عليه ──
-  if (isAdmin) {
-    await telegramRequest("sendMessage", {
-      chat_id: chatId,
-      text: `🐞 Debug:\nstate = "${state}"\ntext = "${text}"\nsubjects keys = ${Object.keys(subjects).join(", ") || "(فاضي)"}`
-    });
-  }
   await sendMainMenu(chatId, firstName, isAdmin);
 }
 
