@@ -253,11 +253,6 @@ async function handleMessage(msg) {
         await telegramRequest("sendDocument", { chat_id: chatId, document: `${RAW_BASE}/${encodeURIComponent(fileVal)}`, caption: `📚 ${subject}\n📄 ${cleanText}` });
       }
 
-      await telegramRequest("sendMessage", {
-        chat_id:      chatId,
-        text:         `📖 ${subject} — اختر الشيت:`,
-        reply_markup: await lecturesReplyKeyboard(subject, lectures)
-      });
       return;
     }
 
