@@ -156,7 +156,7 @@ function mainReplyKeyboard(isAdmin) {
 // ضيف هنا: اسم المادة بالظبط (زي label فوق) → رقم المحاضرة → الرابط
 const LECTURE_VIDEOS = {
   "Physics – 2": {
-    // "1": "https://portal.ust.edu/.....",
+    "1": "https://scalelite.ust.edu.sd/playback/presentation/2.3/b484952f7d3510dd803396aeeefe5db6c46f26ee-1784966409912",
   },
   // "اسم المادة الكامل": { "1": "رابط", "2": "رابط" },
 };
