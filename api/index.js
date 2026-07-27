@@ -152,6 +152,15 @@ function mainReplyKeyboard(isAdmin) {
   return { keyboard: rows, resize_keyboard: true };
 }
 
+// ── روابط فيديوهات المحاضرات (بوابة الجامعة) ──
+// ضيف هنا: اسم المادة بالظبط (زي label فوق) → رقم المحاضرة → الرابط
+const LECTURE_VIDEOS = {
+  "Physics – 2": {
+    // "1": "https://portal.ust.edu/.....",
+  },
+  // "اسم المادة الكامل": { "1": "رابط", "2": "رابط" },
+};
+
 function lectureLabel(lec) {
   return /^\d+$/.test(lec) ? `Lec ${lec}` : lec;
 }
@@ -162,6 +171,24 @@ async function lecturesReplyKeyboard(subject, lectures) {
   for (const lec of sorted) {
     rows.push([{ text: lectureLabel(lec) }]);
   }
+  rows.push([{ text: "Back" }, { text: "Main Menu" }]);
+  return { keyboard: rows, resize_keyboard: true };
+}
+
+function subjectMenuKeyboard() {
+  return {
+    keyboard: [
+      [{ text: "📄 الشيتات" }, { text: "🎥 المحاضرات" }],
+      [{ text: "Back" }, { text: "Main Menu" }]
+    ],
+    resize_keyboard: true
+  };
+}
+
+function videosReplyKeyboard(subject) {
+  const videos = LECTURE_VIDEOS[subject] || {};
+  const sorted = Object.keys(videos).sort(naturalSort);
+  const rows   = sorted.map(lec => [{ text: lectureLabel(lec) }]);
   rows.push([{ text: "Back" }, { text: "Main Menu" }]);
   return { keyboard: rows, resize_keyboard: true };
 }
@@ -208,8 +235,28 @@ async function handleMessage(msg) {
     }
   }
 
-  // ── أزرار عامة تشتغل من أي مكان ──
-  if (text === "Main Menu" || text === "Back") {
+  // ── زرار Main Menu (يرجع للرئيسية من أي مكان) ──
+  if (text === "Main Menu") {
+    await setState(chatId, "main");
+    await sendMainMenu(chatId, firstName, isAdmin);
+    return;
+  }
+
+  const subjects = getSubjects();
+  const state    = await getState(chatId);
+
+  // ── زرار Back (بيرجع مستوى واحد بس، مش للرئيسية على طول) ──
+  if (text === "Back") {
+    if (state.startsWith("sheets:") || state.startsWith("videos:")) {
+      const subject = state.slice(state.indexOf(":") + 1);
+      await setState(chatId, `menu:${subject}`);
+      await telegramRequest("sendMessage", {
+        chat_id:      chatId,
+        text:         `📖 ${subject} — اختر:`,
+        reply_markup: subjectMenuKeyboard()
+      });
+      return;
+    }
     await setState(chatId, "main");
     await sendMainMenu(chatId, firstName, isAdmin);
     return;
@@ -233,14 +280,50 @@ async function handleMessage(msg) {
     return;
   }
 
-  const subjects = getSubjects();
-  const state    = await getState(chatId);
+  // ── داخل قائمة مادة (اختيار شيتات / محاضرات) ──
+  if (state.startsWith("menu:")) {
+    const subject = state.slice(5);
 
-  // ── داخل قائمة مادة معيّنة ──
-  if (state.startsWith("subject:")) {
-    const subject   = state.slice(8);
+    if (text === "📄 الشيتات") {
+      const lectures = subjects[subject] || {};
+      if (Object.keys(lectures).length === 0) {
+        await telegramRequest("sendMessage", { chat_id: chatId, text: "⚠️ لا توجد شيتات متوفرة بعد.", reply_markup: subjectMenuKeyboard() });
+        return;
+      }
+      await setState(chatId, `sheets:${subject}`);
+      await telegramRequest("sendMessage", {
+        chat_id:      chatId,
+        text:         `📖 ${subject} — اختر الشيت:`,
+        reply_markup: await lecturesReplyKeyboard(subject, lectures)
+      });
+      return;
+    }
+
+    if (text === "🎥 المحاضرات") {
+      const videos = LECTURE_VIDEOS[subject] || {};
+      if (Object.keys(videos).length === 0) {
+        await telegramRequest("sendMessage", { chat_id: chatId, text: "⚠️ لا توجد روابط محاضرات متوفرة بعد.", reply_markup: subjectMenuKeyboard() });
+        return;
+      }
+      await setState(chatId, `videos:${subject}`);
+      await telegramRequest("sendMessage", {
+        chat_id:      chatId,
+        text:         `🎥 ${subject} — اختر المحاضرة:`,
+        reply_markup: videosReplyKeyboard(subject)
+      });
+      return;
+    }
+
+    // نص غير معروف وهو جوه قائمة المادة → اعرض نفس القائمة تاني
+    await telegramRequest("sendMessage", { chat_id: chatId, text: `📖 ${subject} — اختر:`, reply_markup: subjectMenuKeyboard() });
+    return;
+  }
+
+  // ── داخل قائمة الشيتات ──
+  if (state.startsWith("sheets:")) {
+    const subject   = state.slice(7);
     const lectures  = subjects[subject] || {};
-    const cleanText = text.replace(/^✅\s*/, "").replace(/^Lec\s+/i, "");
+    const cleanText = text.replace(/^Lec\s+/i, "");
 
     if (lectures[cleanText]) {
       const fileVal = lectures[cleanText];
@@ -252,11 +335,9 @@ async function handleMessage(msg) {
       } else {
         await telegramRequest("sendDocument", { chat_id: chatId, document: `${RAW_BASE}/${encodeURIComponent(fileVal)}`, caption: `📚 ${subject}\n📄 ${cleanText}` });
       }
-
       return;
     }
 
-    // نص غير معروف وهو جوه مادة معيّنة → اعرض له نفس القائمة تاني
     await telegramRequest("sendMessage", {
       chat_id:      chatId,
       text:         `📖 ${subject} — اختر الشيت:`,
@@ -265,22 +346,32 @@ async function handleMessage(msg) {
     return;
   }
 
-  // ── في القائمة الرئيسية: هل النص ده اسم مادة؟ ──
-  if (SUBJECT_LABELS.includes(text)) {
-    const lectures = subjects[text] || {};
-    if (Object.keys(lectures).length === 0) {
-      await telegramRequest("sendMessage", {
-        chat_id:      chatId,
-        text:         `📖 ${text}\n⚠️ لا توجد شيتات متوفرة بعد.`,
-        reply_markup: mainReplyKeyboard(isAdmin)
-      });
+  // ── داخل قائمة المحاضرات (روابط الفيديو) ──
+  if (state.startsWith("videos:")) {
+    const subject   = state.slice(7);
+    const videos    = LECTURE_VIDEOS[subject] || {};
+    const cleanText = text.replace(/^Lec\s+/i, "");
+
+    if (videos[cleanText]) {
+      await telegramRequest("sendMessage", { chat_id: chatId, text: `🎥 ${subject}\n📄 ${lectureLabel(cleanText)}\n\n${videos[cleanText]}` });
       return;
     }
-    await setState(chatId, `subject:${text}`);
+
     await telegramRequest("sendMessage", {
       chat_id:      chatId,
-      text:         `📖 ${text} — اختر الشيت:`,
-      reply_markup: await lecturesReplyKeyboard(text, lectures)
+      text:         `🎥 ${subject} — اختر المحاضرة:`,
+      reply_markup: videosReplyKeyboard(subject)
+    });
+    return;
+  }
+
+  // ── في القائمة الرئيسية: هل النص ده اسم مادة؟ ──
+  if (SUBJECT_LABELS.includes(text)) {
+    await setState(chatId, `menu:${text}`);
+    await telegramRequest("sendMessage", {
+      chat_id:      chatId,
+      text:         `📖 ${text} — اختر:`,
+      reply_markup: subjectMenuKeyboard()
     });
     return;
   }
