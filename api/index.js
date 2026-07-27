@@ -158,6 +158,15 @@ const LECTURE_VIDEOS = {
   "Physics – 2": {
     "1": "https://scalelite.ust.edu.sd/playback/presentation/2.3/b484952f7d3510dd803396aeeefe5db6c46f26ee-1784966409912",
   },
+  "Data Structures and Algorithms": {
+    "1": "https://scalelite.ust.edu.sd/playback/presentation/2.3/4b7137527d78029ec20de27402a6b67aea0f4582-1784959276474",
+  },
+  "Fundamentals of Engineering Drawing": {
+    "1": "https://scalelite.ust.edu.sd/playback/presentation/2.3/7aa9cee471567b925a775f1fddbf8c0785b3714b-1785049270063",
+  },
+  "Principles of Computer Programming": {
+    "1": "https://scalelite.ust.edu.sd/playback/presentation/2.3/775c448b22d4252bdc67ae832da230a0344515ae-1785056416780",
+  },
   // "اسم المادة الكامل": { "1": "رابط", "2": "رابط" },
 };
 
