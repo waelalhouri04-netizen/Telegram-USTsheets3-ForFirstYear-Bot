@@ -167,6 +167,12 @@ const LECTURE_VIDEOS = {
   "Principles of Computer Programming": {
     "1": "https://scalelite.ust.edu.sd/playback/presentation/2.3/775c448b22d4252bdc67ae832da230a0344515ae-1785056416780",
   },
+  "Analytical Geometry": {
+  "1": "https://scalelite.ust.edu.sd/playback/presentation/2.3/f45270d235d98131ab2c1149c08db45b5af54b8a-1785322806264",
+  },
+  "Calculus and its Application - 2": {
+  "1": "https://scalelite.ust.edu.sd/playback/presentation/2.3/9e720f148164c0d8886c27d2636f1bf1badd87e5-1785312522251",
+  }
   // "اسم المادة الكامل": { "1": "رابط", "2": "رابط" },
 };
 
