@@ -162,7 +162,7 @@ const LECTURE_VIDEOS = {
   },
   "Data Structures and Algorithms": {
     "1": "https://scalelite.ust.edu.sd/playback/presentation/2.3/4b7137527d78029ec20de27402a6b67aea0f4582-1784959276474",
-    "2": "https://lms.ust.edu.sd/mod/bigbluebuttonbn/bbb_view.php?action=play&bn=34544&rid=32958&rtype=presentation&sesskey=dXC320mbZx",
+    "2": "https://scalelite.ust.edu.sd/playback/presentation/2.3/253413d08042b57776efa5fdbf45cca099d9bcd9-1785564791542",
     "3": "https://scalelite.ust.edu.sd/playback/presentation/2.3/7e8bd3529c1c8338450b6bdb42e9332650f159a3-1786169030263",
   },
   "Fundamentals of Engineering Drawing": {
