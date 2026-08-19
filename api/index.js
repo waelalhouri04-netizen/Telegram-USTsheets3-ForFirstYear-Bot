@@ -157,23 +157,33 @@ function mainReplyKeyboard(isAdmin) {
 const LECTURE_VIDEOS = {
   "Physics – 2": {
     "1": "https://scalelite.ust.edu.sd/playback/presentation/2.3/b484952f7d3510dd803396aeeefe5db6c46f26ee-1784966409912",
-    "2": "https://scalelite.ust.edu.sd/playback/presentation/2.3/fbe347832d328dbb9e36c78884630f4660b7bde5-1785571207819"
+    "2": "https://scalelite.ust.edu.sd/playback/presentation/2.3/fbe347832d328dbb9e36c78884630f4660b7bde5-1785571207819",
+    "3": "https://scalelite.ust.edu.sd/playback/presentation/2.3/b075af2961fed891ab5b37358818cbf35394a116-1786554007800",
   },
   "Data Structures and Algorithms": {
     "1": "https://scalelite.ust.edu.sd/playback/presentation/2.3/4b7137527d78029ec20de27402a6b67aea0f4582-1784959276474",
     "2": "https://lms.ust.edu.sd/mod/bigbluebuttonbn/bbb_view.php?action=play&bn=34544&rid=32958&rtype=presentation&sesskey=dXC320mbZx",
+    "3": "https://scalelite.ust.edu.sd/playback/presentation/2.3/7e8bd3529c1c8338450b6bdb42e9332650f159a3-1786169030263",
   },
   "Fundamentals of Engineering Drawing": {
     "1": "https://scalelite.ust.edu.sd/playback/presentation/2.3/7aa9cee471567b925a775f1fddbf8c0785b3714b-1785049270063",
+    "2": "https://scalelite.ust.edu.sd/playback/presentation/2.3/1989083a6a8dfa45ee66c67f628d0d506f3584ac-1785654014612",
+    "3": "https://scalelite.ust.edu.sd/playback/presentation/2.3/e0c83087cd0302ed47e9d40d25b286c4ddf35e85-1786259564079",
+    
   },
   "Principles of Computer Programming": {
     "1": "https://scalelite.ust.edu.sd/playback/presentation/2.3/775c448b22d4252bdc67ae832da230a0344515ae-1785056416780",
+    "2": "https://scalelite.ust.edu.sd/playback/presentation/2.3/9bbd9fb56e6372c958d86c3824feb0a291d48884-1785661224601",
+    "3": "https://scalelite.ust.edu.sd/playback/presentation/2.3/71fc6d244c71d68bc784a59d0d7f823e89a3bdeb-1786266016014",
   },
   "Analytical Geometry": {
   "1": "https://scalelite.ust.edu.sd/playback/presentation/2.3/f45270d235d98131ab2c1149c08db45b5af54b8a-1785322806264",
+  "3": "https://scalelite.ust.edu.sd/playback/presentation/2.3/e0c83087cd0302ed47e9d40d25b286c4ddf35e85-1786259564079",
+  "4": "https://scalelite.ust.edu.sd/playback/presentation/2.3/85d1d39538e4cd007f829b2ffec85d5eae852d82-1786532412887",
   },
   "Calculus and its Application - 2": {
   "1": "https://scalelite.ust.edu.sd/playback/presentation/2.3/9e720f148164c0d8886c27d2636f1bf1badd87e5-1785312522251",
+  "2": "https://scalelite.ust.edu.sd/playback/presentation/2.3/daa6fa33bf20cbd16c92da9bd0ded579a5a44c39-1785917070524",
   }
   // "اسم المادة الكامل": { "1": "رابط", "2": "رابط" },
 };
