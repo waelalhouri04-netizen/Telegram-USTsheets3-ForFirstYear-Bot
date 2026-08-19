@@ -181,10 +181,12 @@ const LECTURE_VIDEOS = {
   "1": "https://scalelite.ust.edu.sd/playback/presentation/2.3/f45270d235d98131ab2c1149c08db45b5af54b8a-1785322806264",
   "3": "https://scalelite.ust.edu.sd/playback/presentation/2.3/e0c83087cd0302ed47e9d40d25b286c4ddf35e85-1786259564079",
   "4": "https://scalelite.ust.edu.sd/playback/presentation/2.3/85d1d39538e4cd007f829b2ffec85d5eae852d82-1786532412887",
+  "5": "https://scalelite.ust.edu.sd/playback/presentation/2.3/673d6a79d8c2b4968807928b05bdee45009892bb-1787137210766",
   },
   "Calculus and its Application - 2": {
   "1": "https://scalelite.ust.edu.sd/playback/presentation/2.3/9e720f148164c0d8886c27d2636f1bf1badd87e5-1785312522251",
   "2": "https://scalelite.ust.edu.sd/playback/presentation/2.3/daa6fa33bf20cbd16c92da9bd0ded579a5a44c39-1785917070524",
+  "4": "https://scalelite.ust.edu.sd/playback/presentation/2.3/1212aa2bee0f972409f8b9bf708eb623f41fab18-1787126960105",
   }
   // "اسم المادة الكامل": { "1": "رابط", "2": "رابط" },
 };
