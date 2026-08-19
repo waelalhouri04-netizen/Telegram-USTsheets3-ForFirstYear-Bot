@@ -175,6 +175,7 @@ const LECTURE_VIDEOS = {
     "1": "https://scalelite.ust.edu.sd/playback/presentation/2.3/775c448b22d4252bdc67ae832da230a0344515ae-1785056416780",
     "2": "https://scalelite.ust.edu.sd/playback/presentation/2.3/9bbd9fb56e6372c958d86c3824feb0a291d48884-1785661224601",
     "3": "https://scalelite.ust.edu.sd/playback/presentation/2.3/71fc6d244c71d68bc784a59d0d7f823e89a3bdeb-1786266016014",
+    "4": "https://scalelite.ust.edu.sd/playback/presentation/2.3/ecb99604fd2e109fee68a6e1d9aabc49276974b0-1786870857983",
   },
   "Analytical Geometry": {
   "1": "https://scalelite.ust.edu.sd/playback/presentation/2.3/f45270d235d98131ab2c1149c08db45b5af54b8a-1785322806264",
