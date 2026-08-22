@@ -159,6 +159,7 @@ const LECTURE_VIDEOS = {
     "1": "https://scalelite.ust.edu.sd/playback/presentation/2.3/b484952f7d3510dd803396aeeefe5db6c46f26ee-1784966409912",
     "2": "https://scalelite.ust.edu.sd/playback/presentation/2.3/fbe347832d328dbb9e36c78884630f4660b7bde5-1785571207819",
     "3": "https://scalelite.ust.edu.sd/playback/presentation/2.3/b075af2961fed891ab5b37358818cbf35394a116-1786554007800",
+    "5": "https://scalelite.ust.edu.sd/playback/presentation/2.3/8c1c9e29ecc58cdafb32e16c5f47c7722d81e2f8-1787385617891",
   },
   "Data Structures and Algorithms": {
     "1": "https://scalelite.ust.edu.sd/playback/presentation/2.3/4b7137527d78029ec20de27402a6b67aea0f4582-1784959276474",
