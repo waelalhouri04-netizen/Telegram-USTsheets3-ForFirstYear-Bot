@@ -165,6 +165,7 @@ const LECTURE_VIDEOS = {
     "1": "https://scalelite.ust.edu.sd/playback/presentation/2.3/4b7137527d78029ec20de27402a6b67aea0f4582-1784959276474",
     "2": "https://scalelite.ust.edu.sd/playback/presentation/2.3/253413d08042b57776efa5fdbf45cca099d9bcd9-1785564791542",
     "3": "https://scalelite.ust.edu.sd/playback/presentation/2.3/7e8bd3529c1c8338450b6bdb42e9332650f159a3-1786169030263",
+    "4": "https://scalelite.ust.edu.sd/playback/presentation/2.3/ea280c43810b1b80789ef474e2cb6e7f67c25cca-1787380039560",
   },
   "Fundamentals of Engineering Drawing": {
     "1": "https://scalelite.ust.edu.sd/playback/presentation/2.3/7aa9cee471567b925a775f1fddbf8c0785b3714b-1785049270063",
